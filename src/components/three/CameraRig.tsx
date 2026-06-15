@@ -19,12 +19,17 @@ const OVERVIEW_POS = new THREE.Vector3(0, 11, 9.5);
 const TOPDOWN_POS = new THREE.Vector3(0, 14, 0.001);
 const CENTER = new THREE.Vector3(0, 0, 0);
 
-// Kamera 3 mode berbasis OrbitControls:
-// - Overview: target = pusat papan, user bebas orbit/zoom/pitch.
-// - followPawn: target lerp ke pion lokal. Kamera mengikuti AZIMUTH (kiri-kanan)
-//   dari arah radial keluar papan, tapi PITCH & JARAK (zoom) tetap dikontrol
-//   user — jadi user bebas menaik-turunkan kamera & zoom sambil tetap di-follow.
-// - topDown: dipakai saat memilih properti yang akan dijual / lihat list.
+// Kamera 3 mode:
+// - Overview: target = pusat papan; user bebas orbit/zoom.
+// - followPawn: kunci ke pion LOKAL.
+//     * Target = pion lokal (selalu menatap pion sendiri, tak pernah pemain lain).
+//     * Pitch (atas-bawah) & jarak (zoom) dikontrol penuh oleh user — TIDAK
+//       di-reset saat pion bergerak.
+//     * Azimuth (kiri-kanan) di-orient otomatis dari arah radial pusat→pion
+//       (kamera selalu di sisi luar menghadap ke dalam papan).
+//     * Saat pion lokal BERJALAN, kamera ikut bergeser mengikuti pion (smooth)
+//       tanpa mengubah pitch/zoom — tidak ada reset mendadak.
+// - topDown: untuk panel pilih properti / list.
 export default function CameraRig({
   mode,
   pawnRef,
@@ -39,16 +44,16 @@ export default function CameraRig({
   focusTile: number | null;
   resetSignal: number;
   ended: boolean;
-  moving: boolean;
+  moving: boolean; // hanya true saat PION LOKAL bergerak
   destTile: number | null;
 }) {
   const controls = useRef<OrbitControlsImpl>(null);
   const { camera } = useThree();
   const scratch = useRef(new THREE.Vector3());
-  const desiredCam = useRef(new THREE.Vector3());
+  const scratch2 = useRef(new THREE.Vector3());
   const dir = useRef(new THREE.Vector3());
 
-  // snap kamera ke angle default sesuai mode aktif
+  // snap kamera ke angle default sesuai mode aktif (saat ganti mode / reset)
   function snapToMode() {
     const c = controls.current;
     if (!c) return;
@@ -66,7 +71,7 @@ export default function CameraRig({
     c.update();
   }
 
-  // Reset / mode change: snap ke angle default.
+  // hanya snap saat MODE berubah / reset eksplisit — tidak saat pion bergerak.
   useEffect(() => {
     snapToMode();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,34 +84,46 @@ export default function CameraRig({
     let speed = 3.5;
 
     if (mode === "topDown") {
-      target.copy(CENTER); // user bisa orbit/zoom dari atas
-    } else if (focusTile != null) {
-      // sorot tile tertentu — kamera ikut menyamping ke sisi luar tile
-      const t = tileTransform(focusTile);
-      target.set(t.x, 0.2, t.z);
-      speed = 5;
-      followAzimuthOnly(camera, c, desiredCam.current, dir.current, target, delta, speed);
+      target.copy(CENTER);
       lerpTarget(c, target, delta, speed);
       c.update();
       return;
-    } else if (mode === "followPawn" && pawnRef.current.ready && isValid(pawnRef.current.pos)) {
+    }
+
+    if (focusTile != null) {
+      const t = tileTransform(focusTile);
+      target.set(t.x, 0.2, t.z);
+      speed = 5;
+      orientAzimuth(camera, c, scratch2.current, dir.current, target, delta, speed, true);
+      lerpTarget(c, target, delta, speed);
+      c.update();
+      return;
+    }
+
+    if (mode === "followPawn" && pawnRef.current.ready && isValid(pawnRef.current.pos)) {
+      // selalu kunci ke pion LOKAL — tak peduli giliran siapa
       target.copy(pawnRef.current.pos);
-      // saat pion BERJALAN, paksa azimuth follow (kiri-kanan kamera reset ngikut
-      // pion). Saat pion DIAM, biarkan user bebas orbit kiri-kanan.
-      if (moving) {
-        followAzimuthOnly(camera, c, desiredCam.current, dir.current, target, delta, speed);
-      }
-    } else if (mode === "overview" && moving && destTile != null) {
+      // azimuth selalu di-orient ke arah radial keluar pion lokal,
+      // tapi pitch/zoom milik user TIDAK diubah. Kamera bergeser smooth
+      // mengikuti pion (target bergeser → orientAzimuth menyesuaikan posisi
+      // horizontalnya). Pitch user (sumbu Y) tidak disentuh.
+      orientAzimuth(camera, c, scratch2.current, dir.current, target, delta, speed, true);
+      lerpTarget(c, target, delta, speed);
+      c.update();
+      return;
+    }
+
+    // overview: user bebas orbit, target = pusat (atau dest cinematic)
+    if (mode === "overview" && moving && destTile != null) {
       const t = tileTransform(destTile);
-      const dest = target.set(t.x, 0.2, t.z);
+      target.set(t.x, 0.2, t.z);
       if (pawnRef.current.ready && isValid(pawnRef.current.pos)) {
-        dest.lerp(pawnRef.current.pos, 0.45);
+        target.lerp(pawnRef.current.pos, 0.45);
       }
       speed = 2.5;
     } else {
       target.copy(CENTER);
     }
-
     if (!isValid(target)) target.copy(CENTER);
     lerpTarget(c, target, delta, speed);
     c.update();
@@ -123,6 +140,8 @@ export default function CameraRig({
       maxDistance={18}
       minPolarAngle={0.05}
       maxPolarAngle={Math.PI / 2.05}
+      // di mode followPawn: kunci azimuth (kiri-kanan), izinkan pitch/zoom
+      enableRotate={mode !== "followPawn"}
       autoRotate={ended}
       autoRotateSpeed={1.2}
     />
@@ -134,40 +153,40 @@ function lerpTarget(c: OrbitControlsImpl, target: THREE.Vector3, delta: number, 
   c.target.lerp(target, k);
 }
 
-// Geser kamera horizontal mengikuti target (azimuth/follow), TANPA mengubah
-// pitch & jarak (radius) yang dikendalikan user. Caranya: konversi posisi
-// kamera relatif-target ke spherical, override theta-nya jadi arah radial
-// keluar papan, lalu rekonstruksi posisi.
-function followAzimuthOnly(
+// Override AZIMUTH kamera ke arah radial keluar dari pusat → target,
+// PERTAHANKAN pitch (sudut atas-bawah) & radius (zoom) milik user.
+// Caranya: pisahkan posisi kamera relatif target ke (y vertikal) + (horizontal
+// length). Putar horizontal-nya ke arah radial baru. Pitch & jarak tetap.
+function orientAzimuth(
   camera: THREE.Camera,
   c: OrbitControlsImpl,
   scratch: THREE.Vector3,
   dir: THREE.Vector3,
   target: THREE.Vector3,
   delta: number,
-  speed: number
+  speed: number,
+  follow: boolean
 ) {
-  // arah radial keluar: dari pusat papan ke target
   dir.set(target.x - CENTER.x, 0, target.z - CENTER.z);
   if (dir.lengthSq() < 0.0004) return;
   dir.normalize();
 
-  // spherical sekarang relatif target
   scratch.copy(camera.position).sub(c.target);
   const radius = scratch.length();
   if (radius < 0.0001) return;
   const y = scratch.y;
   const horizLen = Math.sqrt(Math.max(0, radius * radius - y * y));
 
-  // posisi horizontal baru: di arah radial keluar dari target, sejauh horizLen
   const targetCamX = target.x + dir.x * horizLen;
   const targetCamZ = target.z + dir.z * horizLen;
   const targetCamY = target.y + y;
 
-  const k = 1 - Math.exp(-speed * delta);
-  camera.position.x += (targetCamX - camera.position.x) * k;
-  camera.position.z += (targetCamZ - camera.position.z) * k;
-  camera.position.y += (targetCamY - camera.position.y) * k;
+  if (follow) {
+    const k = 1 - Math.exp(-speed * delta);
+    camera.position.x += (targetCamX - camera.position.x) * k;
+    camera.position.y += (targetCamY - camera.position.y) * k;
+    camera.position.z += (targetCamZ - camera.position.z) * k;
+  }
 }
 
 function isValid(v: THREE.Vector3): boolean {

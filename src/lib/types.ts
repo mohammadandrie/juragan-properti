@@ -189,6 +189,7 @@ export type GameAction =
   | { type: "payRentCash" }
   | { type: "bankLoan" } // pinjam bank lalu bayar sewa
   | { type: "sellAndPay"; tiles: number[] } // jual aset lalu bayar sewa
+  | { type: "takeover" } // ambil alih properti lawan (bayar 1.5x investasi)
   | { type: "sell"; tile: number } // jual aset bebas (panel properti)
   | { type: "answerQuiz"; choice: number }
   | { type: "payJail" }

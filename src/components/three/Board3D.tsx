@@ -22,6 +22,8 @@ function Scene({
   cameraMode,
   focusTile,
   resetSignal,
+  onDiceSettled,
+  movingPawnIsLocal,
 }: {
   state: ClientGameState;
   highlightTiles: number[];
@@ -29,6 +31,8 @@ function Scene({
   cameraMode: CameraMode;
   focusTile: number | null;
   resetSignal: number;
+  onDiceSettled?: () => void;
+  movingPawnIsLocal?: boolean;
 }) {
   const highlightSet = new Set(highlightTiles);
   if (!state || !state.players.length) return null;
@@ -184,7 +188,7 @@ function Scene({
         );
       })}
 
-      <Dice3D dice={state.lastDice} rollId={rollId} />
+      <Dice3D dice={state.lastDice} rollId={rollId} onAllSettled={onDiceSettled} />
       <Particles bursts={bursts} onDone={(id) => setBursts((arr) => arr.filter((b) => b.id !== id))} />
 
       <CameraRig
@@ -193,7 +197,7 @@ function Scene({
         focusTile={focusTile}
         resetSignal={resetSignal}
         ended={state.phase === "ended"}
-        moving={moving}
+        moving={moving && !!movingPawnIsLocal}
         destTile={state.destTile}
       />
 
@@ -209,6 +213,8 @@ export default function Board3D({
   cameraMode,
   focusTile,
   resetSignal,
+  onDiceSettled,
+  movingPawnIsLocal,
 }: {
   state: ClientGameState;
   highlightTiles: number[];
@@ -216,6 +222,8 @@ export default function Board3D({
   cameraMode: CameraMode;
   focusTile: number | null;
   resetSignal: number;
+  onDiceSettled?: () => void;
+  movingPawnIsLocal?: boolean;
 }) {
   return (
     <Canvas
@@ -249,6 +257,8 @@ export default function Board3D({
         cameraMode={cameraMode}
         focusTile={focusTile}
         resetSignal={resetSignal}
+        onDiceSettled={onDiceSettled}
+        movingPawnIsLocal={movingPawnIsLocal}
       />
     </Canvas>
   );

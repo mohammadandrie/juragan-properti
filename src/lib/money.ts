@@ -23,6 +23,9 @@ export const RENT_MS = 30_000;
 export const UPGRADE_MS = 25_000;
 export const END_AUTO_MS = 4_500; // jeda setelah mendarat sebelum giliran auto-selesai
 
+// Pengali harga ambil-alih properti lawan (terhadap totalInvestment pemilik).
+export const TAKEOVER_MULT = 1.5;
+
 function roundMoney(v: number): number {
   return Math.round(v / 10_000) * 10_000;
 }

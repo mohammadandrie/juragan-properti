@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ClientGameState, GameAction } from "@/lib/types";
 import { BOARD, GROUP_COLORS } from "@/lib/board";
-import { JAIL_FINE, buyCost, sellValue, fmtMoney } from "@/lib/money";
+import { JAIL_FINE, TAKEOVER_MULT, buyCost, sellValue, fmtMoney } from "@/lib/money";
 import type { CameraMode } from "../three/CameraRig";
 
 type Me = {
@@ -15,8 +15,11 @@ type Me = {
   afk: boolean;
 } | null;
 
-// Panel BAWAH-TENGAH: tombol aksi mengambang tanpa background panel.
-// Posisi terpusat di tengah (kanan ada card properti, kiri ada panel pemain).
+// Panel BAWAH dua baris:
+//   - Baris ATAS  : zona transaksional (lempar dadu, beli, sewa, upgrade, dll).
+//                   Disembunyikan saat bot mengambil alih (kecuali tombol resume).
+//   - Baris BAWAH : tombol Propertiku + Emote (SELALU tampil di semua kondisi).
+// Modal konfirmasi/popup ditengahkan dengan backdrop blur.
 export default function ActionPanel({
   state,
   myTurn,
@@ -29,6 +32,7 @@ export default function ActionPanel({
   onToggleProps,
   propsOpen,
   setCameraMode,
+  jailReason,
 }: {
   state: ClientGameState;
   myTurn: boolean;
@@ -41,6 +45,7 @@ export default function ActionPanel({
   onToggleProps: () => void;
   propsOpen: boolean;
   setCameraMode: (m: CameraMode) => void;
+  jailReason: string | null;
 }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -60,171 +65,189 @@ export default function ActionPanel({
   const anyPending = buy || rent || up || (animating ? null : state.quiz);
 
   const cur = state.players[state.currentPlayer];
-  const canRoll = state.canRoll && !animating;
 
-  // popup konfirmasi (bayar tunai / pinjam bank / jual properti) — bayar sewa
-  const [confirmAction, setConfirmAction] = useState<null | "cash" | "loan">(null);
-  // mode jual saat bayar sewa: pilih properti yang dijual
+  // Modal konfirmasi bayar sewa: tunai / pinjam bank / takeover
+  const [confirmAction, setConfirmAction] = useState<null | "cash" | "loan" | "takeover">(null);
   const [sellMode, setSellMode] = useState(false);
+
+  // Saat bot mengambil alih: TIDAK menampilkan zona transaksional.
+  const isAfkTakeover = !!me?.afk && state.phase === "playing";
 
   return (
     <>
-      <div className="flex min-h-[4.5rem] flex-wrap items-center justify-center gap-2 px-4 py-2">
-        {/* AFK: tombol kembali main */}
-        {me?.afk && state.phase === "playing" && (
-          <button
-            onClick={() => act({ type: "resume" })}
-            className="flex h-12 items-center gap-2 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 px-6 text-base font-black text-amber-950 shadow-lg ring-2 ring-white/30 hover:scale-[1.03] active:scale-95 transition"
-          >
-            🎮 Ambil Alih dari Bot
-          </button>
-        )}
-
-        {/* status giliran (info pemain lain saat bukan giliranku) */}
-        {state.phase === "playing" && !mineBuy && !mineRent && !mineUp && !myTurn && !me?.afk && (
-          <span className="text-lg font-bold">
-            {animating ? (
-              <span className="text-amber-300/80">Pion sedang berjalan…</span>
-            ) : (
-              <span className="text-white/70">
-                Giliran <b style={{ color: cur?.color }}>{cur?.name}</b>
-                {cur?.bot && " · 🤖"}
+      {/* BARIS ATAS: zona transaksional */}
+      <div className="flex min-h-[3.5rem] flex-wrap items-center justify-center gap-2 px-4 pb-1 pt-2">
+        {isAfkTakeover ? null : (
+          <>
+            {/* status giliran (pemain lain) */}
+            {state.phase === "playing" && !mineBuy && !mineRent && !mineUp && !myTurn && (
+              <span className="text-lg font-bold">
+                {animating ? (
+                  <span className="text-amber-300/80">Pion sedang berjalan…</span>
+                ) : (
+                  <span className="text-white/70">
+                    Giliran <b style={{ color: cur?.color }}>{cur?.name}</b>
+                    {cur?.bot && " · 🤖"}
+                  </span>
+                )}
               </span>
             )}
-          </span>
-        )}
 
-        {/* penjara — tombol */}
-        {myTurn && me?.inJail && canRoll && !anyPending && (
-          <>
-            <span className="text-base font-bold text-rose-300">🚔 Dalam penjara</span>
-            <button onClick={() => act({ type: "payJail" })} className={btn("amber")}>
-              Bayar Denda {fmtMoney(JAIL_FINE)}
-            </button>
-            {me.jailCards > 0 && (
-              <button onClick={() => act({ type: "useJailCard" })} className={btn("amber")}>
-                Pakai Kartu Bebas
-              </button>
-            )}
-            <button onClick={() => act({ type: "roll" })} className={btn("rose")}>
-              🎲 Lempar Dadu (dobel)
-            </button>
-          </>
-        )}
-
-        {/* GILIRANMU + tombol lempar (tepat di atas) */}
-        {myTurn && canRoll && !anyPending && !me?.inJail && (
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-sm font-black uppercase tracking-[0.2em] text-amber-300 drop-shadow-[0_0_12px_rgba(251,191,36,0.6)]">
-              Giliranmu
-            </span>
-            <button
-              onClick={() => act({ type: "roll" })}
-              className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 px-10 text-2xl font-black text-white shadow-[0_0_30px_-6px_rgba(244,63,94,0.7)] ring-2 ring-white/20 hover:scale-[1.03] active:scale-95 transition"
-            >
-              🎲 Lempar Dadu
-            </button>
-            {turnSecsLeft !== null && (
-              <span
-                className={`tabular-nums text-sm font-bold ${
-                  turnSecsLeft <= 5 ? "text-rose-400 animate-pulse" : "text-white/50"
-                }`}
-              >
-                {turnSecsLeft}s sebelum bot ambil alih
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* tawaran beli kota */}
-        {mineBuy && buy && (
-          <BuyRow buy={buy} me={me} act={act} secs={secsLeft} />
-        )}
-
-        {/* upgrade kota sendiri */}
-        {mineUp && up && (
-          <>
-            <Label
-              tileId={up.tile}
-              secs={secsLeft}
-              prefix={`Upgrade ke ${up.toLevel === 5 ? "Hotel" : `Level ${up.toLevel}`}`}
-            />
-            <button onClick={() => act({ type: "upgrade" })} className={btn("amber")}>
-              🏗 Upgrade · {fmtMoney(up.cost)}
-            </button>
-            <button onClick={() => act({ type: "skipUpgrade" })} className={btn("ghost")}>
-              Lewati
-            </button>
-          </>
-        )}
-
-        {/* bayar sewa — 3 tombol dengan konfirmasi */}
-        {mineRent && rent && me && !sellMode && (
-          <RentRow3
-            state={state}
-            rent={rent}
-            me={me}
-            secs={secsLeft}
-            onCash={() => setConfirmAction("cash")}
-            onLoan={() => setConfirmAction("loan")}
-            onSell={() => {
-              setSellMode(true);
-              setCameraMode("topDown");
-            }}
-          />
-        )}
-
-        {/* info pasif: pemain lain memutuskan */}
-        {anyPending && !mineBuy && !mineRent && !mineUp && !me?.afk && (
-          <span className="text-sm text-white/55">Pemain lain sedang mengambil keputusan…</span>
-        )}
-
-        {/* tombol Propertiku (kanan) + emote — sembunyi saat sedang menghadapi pending */}
-        {me && !animating && !anyPending && (
-          <>
-            <button
-              onClick={onToggleProps}
-              className={`flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold ring-1 transition ${
-                propsOpen
-                  ? "bg-amber-400 text-amber-950 ring-amber-300"
-                  : "bg-black/40 text-white ring-white/15 hover:bg-black/60"
-              }`}
-            >
-              🏠 Propertiku
-            </button>
-            <div className="flex items-center gap-1">
-              {["😂", "🔥", "😭", "👍", "😡", "🤑"].map((e) => (
-                <button
-                  key={e}
-                  onClick={() => act({ type: "emote", icon: e })}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/30 text-xl ring-1 ring-white/10 hover:bg-black/50 hover:scale-110 active:scale-95 transition"
-                >
-                  {e}
+            {/* penjara */}
+            {myTurn && me?.inJail && state.canRoll && !anyPending && !animating && (
+              <>
+                <span className="rounded-lg bg-rose-500/20 px-3 py-1.5 text-base font-bold text-rose-300 ring-1 ring-rose-400/40">
+                  🚔 Anda di Penjara{jailReason ? ` · ${jailReason.replace(/^[^a-zA-Z]+/, "")}` : ""}
+                </span>
+                <button onClick={() => act({ type: "payJail" })} className={btn("amber")}>
+                  Bayar Denda {fmtMoney(JAIL_FINE)}
                 </button>
-              ))}
-            </div>
+                {me.jailCards > 0 && (
+                  <button onClick={() => act({ type: "useJailCard" })} className={btn("amber")}>
+                    Pakai Kartu Bebas
+                  </button>
+                )}
+                <button onClick={() => act({ type: "roll" })} className={btn("rose")}>
+                  🎲 Lempar Dadu (coba dobel)
+                </button>
+              </>
+            )}
+
+            {/* GILIRANMU + tombol lempar (1 saja, di sini) */}
+            {myTurn && state.canRoll && !anyPending && !me?.inJail && !animating && (
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-sm font-black uppercase tracking-[0.2em] text-amber-300 drop-shadow-[0_0_12px_rgba(251,191,36,0.6)]">
+                  Giliran Anda
+                </span>
+                <button
+                  onClick={() => act({ type: "roll" })}
+                  className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 px-10 text-2xl font-black text-white shadow-[0_0_30px_-6px_rgba(244,63,94,0.7)] ring-2 ring-white/20 hover:scale-[1.03] active:scale-95 transition"
+                >
+                  🎲 Lempar Dadu
+                </button>
+                {turnSecsLeft !== null && (
+                  <span
+                    className={`tabular-nums text-sm font-bold ${
+                      turnSecsLeft <= 5 ? "text-rose-400 animate-pulse" : "text-white/55"
+                    }`}
+                  >
+                    Bot ambil alih dalam {turnSecsLeft}s
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* tawaran beli kota */}
+            {mineBuy && buy && <BuyRow buy={buy} me={me} act={act} secs={secsLeft} />}
+
+            {/* upgrade kota sendiri */}
+            {mineUp && up && (
+              <>
+                <Label
+                  tileId={up.tile}
+                  secs={secsLeft}
+                  prefix={`Upgrade ke ${up.toLevel === 5 ? "Hotel" : `Level ${up.toLevel}`}`}
+                />
+                <button onClick={() => act({ type: "upgrade" })} className={btn("amber")}>
+                  🏗 Upgrade · {fmtMoney(up.cost)}
+                </button>
+                <button onClick={() => act({ type: "skipUpgrade" })} className={btn("ghost")}>
+                  Lewati
+                </button>
+              </>
+            )}
+
+            {/* bayar sewa: 4 opsi (Pinjam Bank · Tunai · Ambil Alih · Jual) */}
+            {mineRent && rent && me && !sellMode && (
+              <RentRow
+                state={state}
+                rent={rent}
+                me={me}
+                secs={secsLeft}
+                onCash={() => setConfirmAction("cash")}
+                onLoan={() => setConfirmAction("loan")}
+                onTakeover={() => setConfirmAction("takeover")}
+                onSell={() => {
+                  setSellMode(true);
+                  setCameraMode("topDown");
+                }}
+              />
+            )}
+
+            {anyPending && !mineBuy && !mineRent && !mineUp && (
+              <span className="text-sm text-white/55">Pemain lain sedang mengambil keputusan…</span>
+            )}
           </>
         )}
       </div>
 
-      {/* modal konfirmasi bayar sewa */}
+      {/* BARIS BAWAH: persisten — AFK takeover + Propertiku + Emote */}
+      <div className="flex min-h-[3.25rem] flex-wrap items-center justify-center gap-2 px-4 pb-2">
+        {isAfkTakeover && (
+          <button
+            onClick={() => act({ type: "resume" })}
+            className="whitespace-nowrap flex h-11 items-center gap-2 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 px-5 text-sm font-black text-amber-950 shadow-lg ring-2 ring-white/30 hover:scale-[1.03] active:scale-95 transition"
+          >
+            🎮 Ambil Alih dari Bot
+          </button>
+        )}
+        {me && (
+          <button
+            onClick={onToggleProps}
+            className={`whitespace-nowrap flex h-11 items-center gap-2 rounded-xl px-5 text-sm font-bold ring-1 transition ${
+              propsOpen
+                ? "bg-amber-400 text-amber-950 ring-amber-300"
+                : "bg-black/40 text-white ring-white/15 hover:bg-black/60"
+            }`}
+          >
+            🏠 Propertiku
+          </button>
+        )}
+        {me && (
+          <div className="flex items-center gap-1">
+            {["😂", "🔥", "😭", "👍", "😡", "🤑"].map((e) => (
+              <button
+                key={e}
+                onClick={() => act({ type: "emote", icon: e })}
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/30 text-xl ring-1 ring-white/10 hover:bg-black/50 hover:scale-110 active:scale-95 transition"
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* modal konfirmasi (tunai / pinjam / takeover) — TENGAH layar + blur */}
       {confirmAction && rent && me && (
-        <ConfirmRent
+        <ConfirmModal
           kind={confirmAction}
-          amount={rent.amount}
+          rentAmount={rent.amount}
           loanFee={Math.max(0, rent.amount - me.money)}
+          takeoverCost={(() => {
+            const own = state.ownership[rent.tile];
+            return own ? Math.round(own.totalInvestment * TAKEOVER_MULT) : 0;
+          })()}
+          tileName={BOARD[rent.tile].name}
           alreadyUsedLoan={me.hasUsedBankLoan}
+          insufficient={
+            (confirmAction === "cash" && me.money < rent.amount) ||
+            (confirmAction === "takeover" &&
+              me.money <
+                Math.round((state.ownership[rent.tile]?.totalInvestment ?? 0) * TAKEOVER_MULT))
+          }
           onCancel={() => setConfirmAction(null)}
           onOk={() => {
             const k = confirmAction;
             setConfirmAction(null);
             if (k === "cash") act({ type: "payRentCash" });
             if (k === "loan") act({ type: "bankLoan" });
+            if (k === "takeover") act({ type: "takeover" });
           }}
         />
       )}
 
-      {/* panel jual properti saat bayar sewa */}
+      {/* panel jual properti */}
       {sellMode && rent && me && (
         <SellPropertyPanel
           state={state}
@@ -265,10 +288,10 @@ function BuyRow({
 
   return (
     <>
-      <Label tileId={buy.tile} secs={secs} prefix="Kota kosong" />
+      <Label tileId={buy.tile} secs={secs} prefix="Properti kosong" />
       {cantAfford && (
         <span className="rounded-lg bg-rose-500/20 px-3 py-1.5 text-sm font-bold text-rose-300 ring-1 ring-rose-400/40">
-          ⚠ Uangmu kurang untuk beli ({fmtMoney(cheapestCost)})
+          ⚠ Saldo tidak cukup ({fmtMoney(cheapestCost)})
         </span>
       )}
       {Array.from({ length: buy.maxLevel }, (_, i) => i + 1).map((lvl) => {
@@ -292,13 +315,14 @@ function BuyRow({
   );
 }
 
-function RentRow3({
+function RentRow({
   state,
   rent,
   me,
   secs,
   onCash,
   onLoan,
+  onTakeover,
   onSell,
 }: {
   state: ClientGameState;
@@ -307,16 +331,20 @@ function RentRow3({
   secs: number | null;
   onCash: () => void;
   onLoan: () => void;
+  onTakeover: () => void;
   onSell: () => void;
 }) {
   const owner = state.players.find((p) => p.id === rent.ownerId);
+  const own = state.ownership[rent.tile];
+  const takeoverCost = own ? Math.round(own.totalInvestment * TAKEOVER_MULT) : 0;
   const canCash = me.money >= rent.amount;
   const canLoan = !me.hasUsedBankLoan;
+  const canTakeover = !!own && me.money >= takeoverCost;
   const hasAssets = Object.values(state.ownership).some((o) => o.owner === me.id);
 
   return (
     <>
-      <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-col items-start gap-0.5">
         <span className="text-base font-bold text-white">
           {BOARD[rent.tile].name} · sewa {fmtMoney(rent.amount)} ke{" "}
           <b style={{ color: owner?.color }}>{owner?.name}</b>
@@ -327,12 +355,10 @@ function RentRow3({
           </span>
         )}
       </div>
-      {/* kiri: Pinjam Bank | tengah: Bayar Tunai | kanan: Jual Properti */}
       <button
         disabled={!canLoan}
         onClick={onLoan}
         className={canLoan ? btn("sky") : btnDisabled()}
-        title={canLoan ? "Pinjam bank (sekali seumur permainan)" : "Pinjaman sudah dipakai"}
       >
         🏦 Pinjam Bank
       </button>
@@ -342,6 +368,14 @@ function RentRow3({
         className={canCash ? btn("emerald") : btnDisabled()}
       >
         💵 Bayar Tunai
+      </button>
+      <button
+        disabled={!canTakeover}
+        onClick={onTakeover}
+        className={canTakeover ? btn("violet") : btnDisabled()}
+        title={`Ambil alih properti ini seharga ${fmtMoney(takeoverCost)}`}
+      >
+        🤝 Ambil Alih · {fmtMoney(takeoverCost)}
       </button>
       <button
         disabled={!hasAssets}
@@ -354,46 +388,86 @@ function RentRow3({
   );
 }
 
-function ConfirmRent({
+function ConfirmModal({
   kind,
-  amount,
+  rentAmount,
   loanFee,
+  takeoverCost,
+  tileName,
   alreadyUsedLoan,
+  insufficient,
   onCancel,
   onOk,
 }: {
-  kind: "cash" | "loan";
-  amount: number;
+  kind: "cash" | "loan" | "takeover";
+  rentAmount: number;
   loanFee: number;
+  takeoverCost: number;
+  tileName: string;
   alreadyUsedLoan: boolean;
+  insufficient: boolean;
   onCancel: () => void;
   onOk: () => void;
 }) {
-  const title = kind === "cash" ? "Bayar Sewa Tunai" : "Pinjam Bank";
+  const title =
+    kind === "cash" ? "Bayar Sewa Tunai" : kind === "loan" ? "Pinjam Bank" : "Ambil Alih Properti";
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-3xl bg-slate-900 p-6 shadow-2xl ring-1 ring-white/10">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 backdrop-blur-md"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-sm rounded-3xl bg-slate-900 p-6 shadow-2xl ring-1 ring-white/10"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="text-xl font-black text-white">{title}</h3>
-        {kind === "cash" ? (
+        {kind === "cash" && (
           <p className="mt-2 text-base text-white/75">
-            Bayar sewa sebesar <b className="text-emerald-300">{fmtMoney(amount)}</b> ke pemilik.
+            Bayar sewa sebesar <b className="text-emerald-300">{fmtMoney(rentAmount)}</b> kepada
+            pemilik <b>{tileName}</b>.
           </p>
-        ) : (
+        )}
+        {kind === "loan" && (
           <>
             <p className="mt-2 text-base text-white/75">
-              Pinjam <b className="text-sky-300">{fmtMoney(loanFee)}</b> dari bank untuk menutup sewa.
+              Pinjam <b className="text-sky-300">{fmtMoney(loanFee)}</b> dari bank untuk menutup
+              sewa.
             </p>
             <p className="mt-2 rounded-lg bg-amber-500/15 p-3 text-sm font-bold text-amber-300 ring-1 ring-amber-400/30">
-              ⚠ Pinjaman bank hanya bisa digunakan <u>1 kali</u> selama permainan.
-              {alreadyUsedLoan && " (Kamu sudah pernah pakai.)"}
+              ⚠ Pinjaman bank hanya dapat digunakan <u>1 kali</u> selama permainan.
+              {alreadyUsedLoan && " (Anda sudah menggunakan kuota.)"}
             </p>
+          </>
+        )}
+        {kind === "takeover" && (
+          <>
+            <p className="mt-2 text-base text-white/75">
+              Ambil alih <b>{tileName}</b> dari pemiliknya seharga{" "}
+              <b className="text-violet-300">{fmtMoney(takeoverCost)}</b>.
+            </p>
+            <p className="mt-2 rounded-lg bg-violet-500/15 p-3 text-sm font-bold text-violet-200 ring-1 ring-violet-400/30">
+              Setelah ini Anda menjadi pemilik baru dan akan ditawari upgrade jika syarat terpenuhi.
+            </p>
+            {insufficient && (
+              <p className="mt-2 rounded-lg bg-rose-500/15 p-3 text-sm font-bold text-rose-300 ring-1 ring-rose-400/30">
+                ⚠ Saldo tidak cukup.
+              </p>
+            )}
           </>
         )}
         <div className="mt-5 flex gap-2">
           <button onClick={onCancel} className={`flex-1 ${btn("ghost")}`}>
             Batal
           </button>
-          <button onClick={onOk} className={`flex-1 ${btn(kind === "cash" ? "emerald" : "sky")}`}>
+          <button
+            onClick={onOk}
+            disabled={insufficient}
+            className={
+              insufficient
+                ? `flex-1 ${btnDisabled()}`
+                : `flex-1 ${btn(kind === "cash" ? "emerald" : kind === "loan" ? "sky" : "violet")}`
+            }
+          >
             Lanjutkan
           </button>
         </div>
@@ -442,7 +516,7 @@ function SellPropertyPanel({
   }
 
   return (
-    <div className="absolute right-3 top-16 z-40 w-96 max-h-[calc(100vh-9rem)] overflow-y-auto rounded-2xl bg-slate-900/97 p-5 shadow-2xl ring-1 ring-amber-400/30 backdrop-blur">
+    <div className="absolute right-3 top-16 z-40 w-96 max-h-[calc(100vh-10rem)] overflow-y-auto rounded-2xl bg-slate-900/97 p-5 shadow-2xl ring-1 ring-amber-400/30 backdrop-blur">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-lg font-black text-white">Pilih Properti Dijual</h3>
         <button
@@ -453,7 +527,7 @@ function SellPropertyPanel({
         </button>
       </div>
       <p className="mt-1 text-sm text-white/60">
-        Sewa <b className="text-rose-300">{fmtMoney(rentAmount)}</b> · kasmu{" "}
+        Sewa <b className="text-rose-300">{fmtMoney(rentAmount)}</b> · saldo{" "}
         <b className="text-amber-300">{fmtMoney(me.money)}</b>
       </p>
 
@@ -541,7 +615,7 @@ function Label({ tileId, secs, prefix }: { tileId: number; secs: number | null; 
   );
 }
 
-type Tone = "emerald" | "amber" | "rose" | "sky" | "ghost";
+type Tone = "emerald" | "amber" | "rose" | "sky" | "ghost" | "violet";
 function btn(tone: Tone): string {
   const base = "rounded-xl px-5 py-3 text-base font-bold active:scale-95 transition text-center shadow-lg";
   const tones: Record<Tone, string> = {
@@ -549,6 +623,7 @@ function btn(tone: Tone): string {
     amber: "bg-amber-500 text-amber-950 hover:bg-amber-400",
     rose: "bg-rose-600/90 text-white hover:bg-rose-500",
     sky: "bg-sky-500 text-sky-950 hover:bg-sky-400",
+    violet: "bg-violet-500 text-violet-950 hover:bg-violet-400",
     ghost: "bg-white/10 text-white hover:bg-white/20",
   };
   return `${base} ${tones[tone]}`;

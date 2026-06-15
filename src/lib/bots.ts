@@ -1,6 +1,6 @@
 import { GameState, GameAction, Player, BotPersona } from "./types";
 import { BOARD } from "./board";
-import { buyCost, sellValue } from "./money";
+import { buyCost, sellValue, TAKEOVER_MULT } from "./money";
 import { QUIZ_QUESTIONS } from "./quiz";
 
 export const BOT_PROFILES: Record<BotPersona, { name: string; color: string; pawn: Player["pawn"] }> = {
@@ -35,6 +35,14 @@ export function decideBotAction(g: GameState, bot: Player): GameAction | null {
   // --- bayar sewa ---
   if (g.pendingRent && g.pendingRent.playerId === bot.id) {
     const pr = g.pendingRent;
+    // pertimbangkan ambil alih jika mampu & properti bernilai strategis (jago saja)
+    const own = g.ownership[pr.tile];
+    if (own && persona === "jago") {
+      const takeoverCost = Math.round(own.totalInvestment * TAKEOVER_MULT);
+      if (bot.money - takeoverCost >= reserve(persona) * 0.7) {
+        return { type: "takeover" };
+      }
+    }
     if (bot.money >= pr.amount) return { type: "payRentCash" };
     // kurang uang: jual aset termurah dulu sampai cukup
     const owned = ownedSorted(g, bot);

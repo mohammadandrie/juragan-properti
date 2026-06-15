@@ -33,13 +33,25 @@ const FACES: { value: number; pos: [number, number, number]; rot: [number, numbe
 ];
 
 // Dadu "fisik": dilempar dari atas, melambung dengan gravitasi, mantul 2x, lalu snap ke nilai.
-function Die({ value, x, seed }: { value: number; x: number; seed: number }) {
+function Die({
+  value,
+  x,
+  seed,
+  onSettled,
+}: {
+  value: number;
+  x: number;
+  seed: number;
+  onSettled?: () => void;
+}) {
   const ref = useRef<THREE.Group>(null);
   const phase = useRef<"fly" | "settle">("fly");
+  const settledNotified = useRef(false);
   const vel = useRef({ y: 0, t: 0 });
 
   useEffect(() => {
     phase.current = "fly";
+    settledNotified.current = false;
     vel.current = { y: 4 + (seed % 10) * 0.1, t: 0 };
     const g = ref.current;
     if (g) {
@@ -81,6 +93,11 @@ function Die({ value, x, seed }: { value: number; x: number; seed: number }) {
       g.position.y += (0.3 - g.position.y) * k;
       g.position.x += (x - g.position.x) * k;
       g.position.z += (0 - g.position.z) * k;
+      // dadu sudah cukup mendekati nilainya → beri tahu sekali
+      if (!settledNotified.current && Math.abs(shortAngle(g.rotation.x, tx)) < 0.05) {
+        settledNotified.current = true;
+        onSettled?.();
+      }
     }
   });
 
@@ -109,17 +126,31 @@ function shortAngle(from: number, to: number): number {
   return diff > Math.PI ? diff - Math.PI * 2 : diff < -Math.PI ? diff + Math.PI * 2 : diff;
 }
 
-export default function Dice3D({ dice, rollId }: { dice: [number, number] | null; rollId: number }) {
+export default function Dice3D({
+  dice,
+  rollId,
+  onAllSettled,
+}: {
+  dice: [number, number] | null;
+  rollId: number;
+  onAllSettled?: () => void;
+}) {
   // rollId berubah tiap lemparan agar dadu dilempar ulang walau nilainya sama
   const [visible, setVisible] = useState(false);
+  const settledCount = useRef(0);
   useEffect(() => {
     if (dice) setVisible(true);
+    settledCount.current = 0;
   }, [dice, rollId]);
   if (!dice || !visible) return null;
+  const handleSettled = () => {
+    settledCount.current++;
+    if (settledCount.current >= 2) onAllSettled?.();
+  };
   return (
     <group position={[0, 0, 1.2]}>
-      <Die value={dice[0]} x={-0.45} seed={rollId * 7 + 1} />
-      <Die value={dice[1]} x={0.45} seed={rollId * 13 + 5} />
+      <Die value={dice[0]} x={-0.45} seed={rollId * 7 + 1} onSettled={handleSettled} />
+      <Die value={dice[1]} x={0.45} seed={rollId * 13 + 5} onSettled={handleSettled} />
     </group>
   );
 }

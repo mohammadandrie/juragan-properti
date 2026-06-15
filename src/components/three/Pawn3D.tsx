@@ -10,7 +10,9 @@ import PawnModel from "./PawnModel";
 import type { PawnFocusRef } from "./CameraRig";
 
 const STEP_DURATION = 0.28; // detik per petak
-const START_DELAY = 0.75; // jeda sebelum jalan: beri waktu dadu mendarat & angka terbaca
+// Jeda total sebelum pion mulai berjalan: ~1s untuk dadu menyelesaikan
+// animasinya + ~1s jeda baca angka. Selaras dengan gating di GameClient.
+const START_DELAY = 2.0;
 
 export default function Pawn3D({
   color,
@@ -138,17 +140,30 @@ function PawnTime({ kind, color, walking }: { kind: PawnKind; color: string; wal
   return <PawnModel kind={kind} color={color} walking={walking} t={t} />;
 }
 
+// Emote 3D billboard: emoji selalu menghadap kamera (3D-aware), dengan
+// "balon" putih di belakangnya agar terbaca dari sudut kamera mana pun.
 function EmoteBubble({ icon }: { icon: string }) {
   const ref = useRef<THREE.Group>(null);
   useFrame(({ clock, camera }) => {
     const g = ref.current;
     if (!g) return;
-    g.position.y = 0.62 + Math.sin(clock.elapsedTime * 3) * 0.03;
-    g.quaternion.copy(camera.quaternion); // selalu hadap kamera
+    // float halus + sedikit skala "pop" awal
+    g.position.y = 0.78 + Math.sin(clock.elapsedTime * 3) * 0.04;
+    g.quaternion.copy(camera.quaternion);
   });
   return (
-    <group ref={ref} position={[0, 0.62, 0]}>
-      <Text fontSize={0.3} anchorX="center" anchorY="middle">
+    <group ref={ref} position={[0, 0.78, 0]}>
+      {/* balon belakang (lingkaran putih) */}
+      <mesh position={[0, 0, -0.001]}>
+        <circleGeometry args={[0.22, 32]} />
+        <meshBasicMaterial color="#ffffff" />
+      </mesh>
+      {/* bayangan tipis */}
+      <mesh position={[0.012, -0.012, -0.0005]}>
+        <circleGeometry args={[0.22, 32]} />
+        <meshBasicMaterial color="#0f172a" transparent opacity={0.25} />
+      </mesh>
+      <Text fontSize={0.32} anchorX="center" anchorY="middle">
         {icon}
       </Text>
     </group>

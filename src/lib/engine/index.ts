@@ -13,7 +13,8 @@ import {
 } from "./helpers";
 import { rollDice } from "./core";
 import { answerQuiz, maybeExpireQuiz, maybeTriggerEvent, tickEvents } from "./quizEvent";
-import { JAIL_FINE, END_AUTO_MS, buyCost, sellValue, fmtMoney } from "../money";
+import { JAIL_FINE, END_AUTO_MS, TAKEOVER_MULT, buyCost, sellValue, fmtMoney } from "../money";
+import { offerUpgrade } from "./core";
 
 export * from "./helpers";
 export * from "./core";
@@ -263,6 +264,35 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       if (currentPlayer(g).id === p.id && g.canRoll) {
         g.phaseDeadline = Date.now() + 30_000;
       }
+      return null;
+    }
+
+    case "takeover": {
+      const err = mustBeTurn(g, p);
+      if (err) return err;
+      const pr = g.pendingRent;
+      if (!pr || pr.playerId !== p.id) return "Tidak ada properti yang bisa diambil alih.";
+      const own = g.ownership[pr.tile];
+      if (!own || own.owner === p.id) return "Properti tidak dapat diambil alih.";
+      const owner = g.players.find((q) => q.id === own.owner);
+      if (!owner || owner.bankrupt || owner.surrendered) return "Pemilik tidak aktif.";
+      const cost = Math.round(own.totalInvestment * TAKEOVER_MULT);
+      if (p.money < cost) return `Saldo tidak cukup untuk ambil alih (butuh ${fmtMoney(cost)}).`;
+      transfer(g, p, owner, cost);
+      g.ownership[pr.tile] = {
+        owner: p.id,
+        level: own.level,
+        // totalInvestment baru = harga ambil alih (basis sewa & jual selanjutnya)
+        totalInvestment: cost,
+      };
+      g.pendingRent = null;
+      g.phaseDeadline = null;
+      pushLog(
+        g,
+        `🤝 ${p.name} mengambil alih ${BOARD[pr.tile].name} dari ${owner.name} dengan harga ${fmtMoney(cost)}.`
+      );
+      // Tawarkan upgrade kalau memenuhi syarat (selaras dgn mendarat di kota sendiri)
+      offerUpgrade(g, p, pr.tile);
       return null;
     }
 
