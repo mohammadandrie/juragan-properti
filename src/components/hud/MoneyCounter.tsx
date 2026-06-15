@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { fmtMoney } from "@/lib/money";
 
 // Angka yang beranimasi count-up/down; hijau saat naik, merah saat turun.
 export default function MoneyCounter({ value, className }: { value: number; className?: string }) {
@@ -25,10 +26,7 @@ export default function MoneyCounter({ value, className }: { value: number; clas
     return () => cancelAnimationFrame(raf.current);
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fmt =
-    Math.abs(display) >= 1000
-      ? `Rp ${(display / 1000).toFixed(display % 1000 === 0 ? 0 : 2).replace(".", ",")} M`
-      : `Rp ${display}jt`;
+  const fmt = fmtMoney(display);
 
   return (
     <span

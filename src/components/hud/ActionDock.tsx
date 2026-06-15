@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { ClientGameState, GameAction } from "@/lib/types";
-import { BOARD } from "@/lib/board";
-import MoneyCounter from "./MoneyCounter";
+import { JAIL_FINE, fmtMoney } from "@/lib/money";
 
 // Dock aksi bawah-tengah: tombol kontekstual yang muncul/hilang sesuai state.
 // Tidak ada panel; tombol melayang langsung di atas scene.
@@ -19,32 +18,14 @@ export default function ActionDock({
   act: (a: GameAction) => void;
 }) {
   const [emoteOpen, setEmoteOpen] = useState(false);
-  const pendingTile = state.pendingBuy !== null ? BOARD[state.pendingBuy] : null;
+  const pending =
+    state.pendingBuy !== null ||
+    state.pendingRent !== null ||
+    state.pendingUpgrade !== null ||
+    state.quiz !== null;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex flex-col items-center gap-2">
-      {/* tawaran beli */}
-      {myTurn && pendingTile && (
-        <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-black/55 px-5 py-2.5 backdrop-blur-md ring-1 ring-white/15">
-          <span className="text-sm font-semibold text-white">
-            Beli <b className="text-amber-300">{pendingTile.name}</b>{" "}
-            <MoneyCounter value={pendingTile.price!} className="font-black" />?
-          </span>
-          <button
-            onClick={() => act({ type: "buy" })}
-            className="rounded-full bg-emerald-500 px-4 py-1.5 text-sm font-black text-emerald-950 shadow-lg shadow-emerald-500/40 hover:bg-emerald-400 active:scale-95 transition"
-          >
-            ✅ Beli
-          </button>
-          <button
-            onClick={() => act({ type: "skip" })}
-            className="rounded-full bg-white/15 px-4 py-1.5 text-sm font-bold text-white hover:bg-white/25 active:scale-95 transition"
-          >
-            🔨 Lelang
-          </button>
-        </div>
-      )}
-
       {/* penjara */}
       {myTurn && me?.inJail && state.canRoll && (
         <div className="pointer-events-auto flex gap-2">
@@ -52,7 +33,7 @@ export default function ActionDock({
             onClick={() => act({ type: "payJail" })}
             className="rounded-full bg-amber-500/90 px-4 py-1.5 text-xs font-bold text-amber-950 hover:bg-amber-400 active:scale-95 transition"
           >
-            💸 Bayar 50jt
+            💸 Bayar {fmtMoney(JAIL_FINE)}
           </button>
           {me.jailCards > 0 && (
             <button
@@ -95,7 +76,7 @@ export default function ActionDock({
         )}
 
         {/* tombol utama */}
-        {myTurn && state.canRoll && state.pendingBuy === null && !state.auction && !state.quiz && (
+        {myTurn && state.canRoll && !pending && (
           <button
             onClick={() => act({ type: "roll" })}
             className="pointer-events-auto group relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-red-600 text-4xl shadow-[0_0_40px_-5px_rgba(244,63,94,0.7)] ring-2 ring-white/30 hover:scale-105 active:scale-95 transition animate-[wiggle_2s_ease-in-out_infinite]"
@@ -108,7 +89,7 @@ export default function ActionDock({
           </button>
         )}
 
-        {myTurn && !state.canRoll && state.pendingBuy === null && !state.auction && !state.quiz && (
+        {myTurn && !state.canRoll && !pending && (
           <button
             onClick={() => act({ type: "endTurn" })}
             className="pointer-events-auto rounded-full bg-white/15 px-6 py-3 text-sm font-black text-white backdrop-blur hover:bg-white/25 active:scale-95 transition ring-1 ring-white/20"

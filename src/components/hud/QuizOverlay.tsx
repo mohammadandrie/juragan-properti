@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ClientGameState, GameAction } from "@/lib/types";
 import { QUIZ_QUESTIONS } from "@/lib/quiz";
-import { QUIZ_REWARD, QUIZ_PENALTY } from "@/lib/board";
+import { QUIZ_REWARD, QUIZ_PENALTY, fmtMoney } from "@/lib/money";
 
 const TOPIC_LABEL = { geografi: "🗺️ Geografi", budaya: "🎭 Budaya", umum: "📚 Umum" };
 
@@ -47,7 +47,7 @@ export default function QuizOverlay({
 
           <div className="p-5">
             <p className="text-center text-xs text-violet-300/70">
-              {isMine ? "Giliranmu menjawab!" : `${player?.name} sedang menjawab…`} · benar +Rp {QUIZ_REWARD}jt · salah −Rp {QUIZ_PENALTY}jt
+              {isMine ? "Giliranmu menjawab!" : `${player?.name} sedang menjawab…`} · benar +{fmtMoney(QUIZ_REWARD)} · salah −{fmtMoney(QUIZ_PENALTY)}
             </p>
 
             <p className="mt-3 text-center text-lg font-bold text-white">{question.q}</p>

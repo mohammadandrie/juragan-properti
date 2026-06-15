@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Text, ContactShadows } from "@react-three/drei";
+import * as THREE from "three";
 import { BOARD } from "@/lib/board";
 import { ClientGameState } from "@/lib/types";
 import { HALF, pawnPos } from "./layout";
@@ -10,17 +11,23 @@ import Tile3D from "./Tile3D";
 import House3D from "./House3D";
 import Pawn3D from "./Pawn3D";
 import Dice3D from "./Dice3D";
-import CameraRig from "./CameraRig";
+import CameraRig, { CameraMode, PawnFocusRef } from "./CameraRig";
 import Particles, { Burst } from "./Particles";
 
 function Scene({
   state,
-  buildable,
+  sellable,
   onTileClick,
+  cameraMode,
+  focusTile,
+  resetSignal,
 }: {
   state: ClientGameState;
-  buildable: Set<number>;
+  sellable: Set<number>;
   onTileClick?: (id: number) => void;
+  cameraMode: CameraMode;
+  focusTile: number | null;
+  resetSignal: number;
 }) {
   if (!state || !state.players.length) return null;
   const alive = state.players.filter((p) => !p.bankrupt);
@@ -31,6 +38,8 @@ function Scene({
   const [rollId, setRollId] = useState(0);
   const [moving, setMoving] = useState(false);
   const moveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // shared ref posisi pion aktif untuk kamera follow
+  const pawnFocus = useRef<PawnFocusRef>({ pos: new THREE.Vector3(0, 0.12, 0), ready: false });
 
   const addBurst = (b: Omit<Burst, "id" | "startedAt">) => {
     setBursts((arr) => [...arr, { ...b, id: burstId.current++, startedAt: Date.now() }]);
@@ -66,11 +75,11 @@ function Scene({
         moveTimer.current = setTimeout(() => setMoving(false), Math.min(steps, 12) * 300 + 600);
         // uang terbang saat bayar sewa (deteksi: uang berkurang & pemilik bertambah)
       }
-      if (old && pl.money > old.money + 20) {
+      if (old && pl.money > old.money + 200_000) {
         const t = pawnPos(pl.pos, 0, 1);
         addBurst({ kind: "coins", origin: [t[0], 0.4, t[2]] });
       }
-      if (old && pl.money < old.money - 20) {
+      if (old && pl.money < old.money - 200_000) {
         // uang keluar -> lembaran terbang ke arah pusat (bank) atau pemilik
         const from = pawnPos(pl.pos, 0, 1);
         addBurst({ kind: "money", origin: [from[0], 0.35, from[2]], target: [0, 0.6, 0] });
@@ -120,16 +129,25 @@ function Scene({
             key={tile.id}
             tile={tile}
             ownerColor={owner?.color}
-            highlight={buildable.has(tile.id)}
+            highlight={sellable.has(tile.id)}
             pulse={tile.id === lastTile && !moving}
+            dest={state.destTile === tile.id && moving}
             onClick={() => onTileClick?.(tile.id)}
           />
         );
       })}
 
-      {Object.entries(state.ownership).map(([id, own]) =>
-        own.houses > 0 ? <House3D key={id} tileId={Number(id)} houses={own.houses} /> : null
-      )}
+      {Object.entries(state.ownership).map(([id, own]) => {
+        const owner = state.players.find((p) => p.id === own.owner);
+        return (
+          <House3D
+            key={id}
+            tileId={Number(id)}
+            level={own.level}
+            ownerColor={owner?.color}
+          />
+        );
+      })}
 
       {alive.map((p) => {
         const here = alive.filter((q) => q.pos === p.pos);
@@ -143,6 +161,7 @@ function Scene({
             count={here.length}
             active={state.phase === "playing" && p.id === cur?.id}
             emote={p.emote}
+            focusRef={p.id === cur?.id ? pawnFocus : undefined}
           />
         );
       })}
@@ -150,7 +169,13 @@ function Scene({
       <Dice3D dice={state.lastDice} rollId={rollId} />
       <Particles bursts={bursts} onDone={(id) => setBursts((arr) => arr.filter((b) => b.id !== id))} />
 
-      <CameraRig followTile={lastTile} moving={moving} ended={state.phase === "ended"} />
+      <CameraRig
+        mode={cameraMode}
+        pawnRef={pawnFocus}
+        focusTile={focusTile}
+        resetSignal={resetSignal}
+        ended={state.phase === "ended"}
+      />
 
       <ContactShadows position={[0, -0.001, 0]} opacity={0.5} scale={16} blur={2.2} far={3} />
     </>
@@ -159,12 +184,18 @@ function Scene({
 
 export default function Board3D({
   state,
-  buildable,
+  sellable,
   onTileClick,
+  cameraMode,
+  focusTile,
+  resetSignal,
 }: {
   state: ClientGameState;
-  buildable: Set<number>;
+  sellable: Set<number>;
   onTileClick?: (id: number) => void;
+  cameraMode: CameraMode;
+  focusTile: number | null;
+  resetSignal: number;
 }) {
   return (
     <Canvas
@@ -191,7 +222,14 @@ export default function Board3D({
     >
       <color attach="background" args={["#060b14"]} />
       <fog attach="fog" args={["#060b14", 18, 36]} />
-      <Scene state={state} buildable={buildable} onTileClick={onTileClick} />
+      <Scene
+        state={state}
+        sellable={sellable}
+        onTileClick={onTileClick}
+        cameraMode={cameraMode}
+        focusTile={focusTile}
+        resetSignal={resetSignal}
+      />
     </Canvas>
   );
 }

@@ -1,9 +1,10 @@
 import { GameState, Player } from "../types";
-import { BOARD, tilesInGroup, AIRPORT_RENT } from "../board";
+import { BOARD, AIRPORT_RENT, UTILITY_RENT } from "../board";
 import { eventById } from "../events";
+import { rentForLevel } from "../money";
 
 export function alivePlayers(g: GameState): Player[] {
-  return g.players.filter((p) => !p.bankrupt);
+  return g.players.filter((p) => !p.bankrupt && !p.surrendered);
 }
 
 export function currentPlayer(g: GameState): Player {
@@ -38,18 +39,10 @@ export function baseRent(g: GameState, tileId: number, diceSum: number): number 
   const own = g.ownership[tileId];
   if (!own) return 0;
   const owner = g.players.find((p) => p.id === own.owner);
-  if (!owner || owner.bankrupt) return 0;
+  if (!owner || owner.bankrupt || owner.surrendered) return 0;
 
   if (tile.type === "property") {
-    const rent = tile.rent![own.houses];
-    // tanah kosong tapi 1 grup lengkap = sewa 2x (aturan klasik)
-    if (own.houses === 0) {
-      const complete = tilesInGroup(tile.group!).every(
-        (t) => g.ownership[t.id]?.owner === own.owner
-      );
-      if (complete) return rent * 2;
-    }
-    return rent;
+    return rentForLevel(tile.price ?? 0, own.level);
   }
   if (tile.type === "airport") {
     const n = BOARD.filter(
@@ -61,15 +54,49 @@ export function baseRent(g: GameState, tileId: number, diceSum: number): number 
     const n = BOARD.filter(
       (t) => t.type === "utility" && g.ownership[t.id]?.owner === own.owner
     ).length;
-    return diceSum * (n === 2 ? 10 : 4);
+    const base = UTILITY_RENT[n - 1] ?? UTILITY_RENT[0];
+    // sedikit variasi berdasar dadu (4%-12% ekstra)
+    return Math.round(base * (1 + diceSum / 100));
   }
   return 0;
+}
+
+// Sewa final termasuk multiplier event
+export function rentDue(g: GameState, tileId: number, diceSum: number): number {
+  const mult = rentMultiplier(g, tileId);
+  return Math.round(baseRent(g, tileId, diceSum) * mult);
 }
 
 // Transfer uang antar pemain; from/to null = bank
 export function transfer(g: GameState, from: Player | null, to: Player | null, amount: number) {
   if (from) from.money -= amount;
   if (to) to.money += amount;
+}
+
+// Lepas satu aset ke bank (reset penuh)
+export function releaseTile(g: GameState, tileId: number) {
+  delete g.ownership[tileId];
+}
+
+// Daftar id aset milik pemain
+export function ownedTiles(g: GameState, p: Player): number[] {
+  return Object.entries(g.ownership)
+    .filter(([, o]) => o.owner === p.id)
+    .map(([id]) => Number(id));
+}
+
+// Total nilai jual semua aset pemain (50% investasi)
+export function totalSellValue(g: GameState, p: Player): number {
+  return ownedTiles(g, p).reduce((sum, id) => {
+    const inv = g.ownership[id].totalInvestment;
+    return sum + Math.floor(inv / 2 / 10_000) * 10_000;
+  }, 0);
+}
+
+// Kekayaan bersih: uang tunai + nilai investasi penuh semua aset.
+export function netWorth(g: GameState, p: Player): number {
+  const assets = ownedTiles(g, p).reduce((s, id) => s + g.ownership[id].totalInvestment, 0);
+  return p.money + assets;
 }
 
 // Pemain bangkrut: lepas semua properti, cek pemenang
@@ -79,6 +106,10 @@ export function declareBankrupt(g: GameState, p: Player) {
     if (own.owner === p.id) delete g.ownership[Number(id)];
   }
   pushLog(g, `💀 ${p.name} bangkrut!`);
+  checkWinner(g);
+}
+
+export function checkWinner(g: GameState) {
   const alive = alivePlayers(g);
   if (alive.length === 1) {
     g.winner = alive[0].id;
@@ -87,32 +118,23 @@ export function declareBankrupt(g: GameState, p: Player) {
   }
 }
 
-// Paksa bayar; kalau uang kurang, jual aset otomatis lalu bangkrut bila tetap kurang
+// Paksa bayar; kalau uang kurang, jual aset otomatis lalu bangkrut bila tetap kurang.
+// Dipakai untuk pajak/kartu/event (bukan sewa kota lawan yang punya UI sendiri).
 export function forcePay(g: GameState, p: Player, amount: number, to: Player | null) {
-  // jual rumah dulu, lalu properti, sampai cukup
   while (p.money < amount) {
-    const ownedIds = Object.entries(g.ownership)
-      .filter(([, o]) => o.owner === p.id)
-      .map(([id]) => Number(id));
-    if (ownedIds.length === 0) break;
-    // prioritas: jual rumah termahal, lalu properti termurah
-    const withHouses = ownedIds.filter((id) => g.ownership[id].houses > 0);
-    if (withHouses.length > 0) {
-      const id = withHouses[0];
-      g.ownership[id].houses--;
-      p.money += Math.floor((BOARD[id].houseCost ?? 0) / 2);
-      pushLog(g, `🏚️ ${p.name} terpaksa menjual rumah di ${BOARD[id].name}.`);
-    } else {
-      const id = ownedIds[0];
-      delete g.ownership[id];
-      p.money += Math.floor((BOARD[id].price ?? 0) / 2);
-      pushLog(g, `📉 ${p.name} terpaksa menjual ${BOARD[id].name}.`);
-    }
+    const ids = ownedTiles(g, p);
+    if (ids.length === 0) break;
+    // jual aset termurah dulu
+    ids.sort((a, b) => g.ownership[a].totalInvestment - g.ownership[b].totalInvestment);
+    const id = ids[0];
+    const refund = Math.floor(g.ownership[id].totalInvestment / 2 / 10_000) * 10_000;
+    delete g.ownership[id];
+    p.money += refund;
+    pushLog(g, `📉 ${p.name} terpaksa menjual ${BOARD[id].name}.`);
   }
   if (p.money >= amount) {
     transfer(g, p, to, amount);
   } else {
-    // serahkan semua sisa uang lalu bangkrut
     if (to) to.money += Math.max(p.money, 0);
     p.money = 0;
     declareBankrupt(g, p);

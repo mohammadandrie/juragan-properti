@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import { Text } from "@react-three/drei";
 import * as THREE from "three";
 import { GROUP_COLORS } from "@/lib/board";
+import { fmtMoney } from "@/lib/money";
 import { Tile } from "@/lib/types";
 import { tileTransform } from "./layout";
 
@@ -32,12 +33,14 @@ export default function Tile3D({
   ownerColor,
   highlight,
   pulse, // petak baru diinjak -> glow pulse
+  dest, // petak tujuan dadu -> glow kuning terang
   onClick,
 }: {
   tile: Tile;
   ownerColor?: string;
   highlight?: boolean;
   pulse?: boolean;
+  dest?: boolean;
   onClick?: () => void;
 }) {
   const t = tileTransform(tile.id);
@@ -48,7 +51,11 @@ export default function Tile3D({
   useFrame(({ clock }) => {
     const m = matRef.current;
     if (!m) return;
-    if (pulse) {
+    if (dest) {
+      // petak tujuan dadu: glow kuning terang berdenyut
+      m.emissiveIntensity = 0.6 + 0.4 * Math.sin(clock.elapsedTime * 6);
+      m.emissive.set("#fbbf24");
+    } else if (pulse) {
       m.emissiveIntensity = 0.35 + 0.3 * Math.sin(clock.elapsedTime * 5);
       m.emissive.set("#38bdf8");
     } else if (highlight) {
@@ -93,10 +100,11 @@ export default function Tile3D({
         </mesh>
       )}
 
+      {/* ZONA ATAS: nama/label (corner tetap center karena petak besar) */}
       <Text
-        position={[0, 0.106, isProp ? 0.06 : 0]}
+        position={[0, 0.106, t.corner ? 0 : -t.d / 2 + 0.46]}
         rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={t.corner ? 0.16 : 0.105}
+        fontSize={t.corner ? 0.16 : 0.1}
         maxWidth={t.w - 0.12}
         textAlign="center"
         color="#e8f0f8"
@@ -108,16 +116,17 @@ export default function Tile3D({
           : TYPE_LABELS[tile.type] ?? tile.name}
       </Text>
 
+      {/* ZONA BAWAH: harga */}
       {tile.price != null && (
         <Text
-          position={[0, 0.106, t.d / 2 - 0.38]}
+          position={[0, 0.106, t.d / 2 - 0.26]}
           rotation={[-Math.PI / 2, 0, 0]}
           fontSize={0.095}
           color="#7dd3a8"
           anchorX="center"
           anchorY="middle"
         >
-          {`${tile.price}jt`}
+          {fmtMoney(tile.price)}
         </Text>
       )}
     </group>

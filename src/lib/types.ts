@@ -1,5 +1,5 @@
 // Juragan Properti — tipe inti game.
-// Semua uang dalam juta rupiah (100 = Rp 100jt).
+// Semua uang dalam RUPIAH penuh (1_000_000 = Rp1 jt).
 
 export type TileType =
   | "go"
@@ -28,11 +28,9 @@ export interface Tile {
   id: number;
   type: TileType;
   name: string;
-  umr?: number; // UMP/UMK riil (rupiah) — dasar urutan harga, ditampilkan sebagai trivia
-  price?: number;
+  umr?: number; // UMP/UMK riil (rupiah) — trivia
+  price?: number; // basePrice (rupiah penuh)
   group?: ColorGroup;
-  rent?: number[]; // [tanah, 1-4 rumah, hotel]
-  houseCost?: number;
   taxAmount?: number;
 }
 
@@ -53,12 +51,16 @@ export interface Player {
   jailTurns: number;
   jailCards: number;
   bankrupt: boolean;
+  surrendered: boolean; // menyerah sukarela
+  startPassCount: number; // berapa kali lewat MULAI (membuka level upgrade)
+  hasUsedBankLoan: boolean; // pinjaman bank hanya 1x/game
   emote: { icon: string; at: number } | null;
 }
 
 export interface Ownership {
   owner: string;
-  houses: number; // 0-4 rumah, 5 = hotel
+  level: number; // 1-5 (0 = tidak dimiliki / tidak disimpan)
+  totalInvestment: number; // total uang yang dikeluarkan (beli + upgrade)
 }
 
 // ---- Kartu ----
@@ -115,13 +117,28 @@ export interface PendingQuiz {
   deadline: number; // epoch ms
 }
 
-// ---- Lelang ----
-export interface Auction {
+// ---- Interaksi pending (mendarat di petak) ----
+// Tawaran beli kota kosong — pemain pilih level awal sesuai progress START.
+export interface PendingBuy {
+  playerId: string;
   tile: number;
-  highBid: number;
-  highBidder: string | null; // player id
-  deadline: number; // epoch ms
-  passed: string[]; // player id yang menyerah
+  maxLevel: number; // level tertinggi yang boleh dibeli langsung (1-4)
+}
+
+// Sewa yang harus dibayar di kota lawan — pilih cash/jual/pinjam.
+export interface PendingRent {
+  playerId: string;
+  tile: number;
+  ownerId: string;
+  amount: number;
+}
+
+// Kesempatan upgrade saat mendarat di kota sendiri.
+export interface PendingUpgrade {
+  playerId: string;
+  tile: number;
+  toLevel: number; // level tujuan jika upgrade
+  cost: number;
 }
 
 // ---- State utama ----
@@ -131,9 +148,14 @@ export interface GameState {
   players: Player[];
   currentPlayer: number;
   canRoll: boolean;
-  pendingBuy: number | null;
-  auction: Auction | null;
+  pendingBuy: PendingBuy | null;
+  pendingRent: PendingRent | null;
+  pendingUpgrade: PendingUpgrade | null;
   quiz: PendingQuiz | null;
+  // batas waktu fase keputusan aktif (epoch ms); null = tidak ada timer
+  phaseDeadline: number | null;
+  // info dadu & tujuan untuk visual flow
+  destTile: number | null; // petak tujuan yang di-highlight sebelum pion jalan
   activeEvents: ActiveEvent[];
   lastEvent: { eventId: string; tile?: number; at: number } | null;
   lastDice: [number, number] | null;
@@ -155,15 +177,18 @@ export type GameAction =
   | { type: "addBot"; persona: BotPersona }
   | { type: "setPawn"; pawn: PawnKind; color?: string }
   | { type: "roll" }
-  | { type: "buy" }
-  | { type: "skip" } // skip beli -> mulai lelang
-  | { type: "bid"; amount: number }
-  | { type: "passAuction" }
+  | { type: "buyLevel"; level: number } // beli kota kosong di level tertentu
+  | { type: "skipBuy" } // tidak beli
+  | { type: "upgrade" } // upgrade kota sendiri
+  | { type: "skipUpgrade" }
+  | { type: "payRentCash" }
+  | { type: "bankLoan" } // pinjam bank lalu bayar sewa
+  | { type: "sellAndPay"; tiles: number[] } // jual aset lalu bayar sewa
+  | { type: "sell"; tile: number } // jual aset bebas (panel properti)
   | { type: "answerQuiz"; choice: number }
-  | { type: "build"; tile: number }
-  | { type: "sell"; tile: number }
   | { type: "payJail" }
   | { type: "useJailCard" }
+  | { type: "surrender" }
   | { type: "emote"; icon: string }
   | { type: "endTurn" };
 

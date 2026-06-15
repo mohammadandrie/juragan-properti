@@ -29,12 +29,24 @@ export function tileTransform(id: number): TileTransform {
   return { x: HALF - CORNER / 2, z: offset(id - 30), rotY: Math.PI / 2, w, d, corner };
 }
 
-// Posisi pion di petak; spread untuk beberapa pion di petak sama
+// Posisi pion di ZONA TENGAH petak. Untuk beberapa pion, susun grid 2x2 kecil
+// supaya tidak menumpuk teks nama (atas) / harga (bawah).
+const GRID: [number, number][] = [
+  [0, 0],
+  [-0.18, 0.18],
+  [0.18, 0.18],
+  [-0.18, -0.18],
+];
 export function pawnPos(id: number, index: number, count: number): [number, number, number] {
   const t = tileTransform(id);
-  const spread = count > 1 ? 0.22 : 0;
-  const angle = (index / Math.max(count, 1)) * Math.PI * 2;
-  return [t.x + Math.cos(angle) * spread, 0.12, t.z + Math.sin(angle) * spread];
+  if (count <= 1) return [t.x, 0.12, t.z];
+  // offset lokal (grid), lalu rotasikan mengikuti orientasi tile
+  const [lx, lz] = GRID[index % GRID.length];
+  const cos = Math.cos(t.rotY);
+  const sin = Math.sin(t.rotY);
+  const ox = lx * cos - lz * sin;
+  const oz = lx * sin + lz * cos;
+  return [t.x + ox, 0.12, t.z + oz];
 }
 
 // Jalur pion dari petak a ke b (maju searah jarum jam) — untuk animasi jalan petak-per-petak

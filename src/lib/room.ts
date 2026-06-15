@@ -1,8 +1,8 @@
-import { GameState, Player, PawnKind, BotPersona } from "./types";
+import { GameState, Player, BotPersona } from "./types";
 import { BOT_PROFILES, decideBotAction } from "./bots";
-import { applyAction, maybeSettleAuction, maybeExpireQuiz, currentPlayer, advanceTurn } from "./engine";
+import { applyAction, maybeExpireQuiz, maybeExpirePhase, currentPlayer, advanceTurn } from "./engine";
+import { START_MONEY } from "./money";
 
-const START_MONEY = 1500;
 export const PLAYER_COLORS = ["#22d3ee", "#f43f5e", "#a3e635", "#fbbf24"];
 
 function randomId(len: number): string {
@@ -27,6 +27,9 @@ export function newPlayer(name: string, idx: number, bot: BotPersona | null = nu
     jailTurns: 0,
     jailCards: 0,
     bankrupt: false,
+    surrendered: false,
+    startPassCount: 0,
+    hasUsedBankLoan: false,
     emote: null,
   };
 }
@@ -40,8 +43,11 @@ export function newGame(hostName: string): GameState {
     currentPlayer: 0,
     canRoll: false,
     pendingBuy: null,
-    auction: null,
+    pendingRent: null,
+    pendingUpgrade: null,
     quiz: null,
+    phaseDeadline: null,
+    destTile: null,
     activeEvents: [],
     lastEvent: null,
     lastDice: null,
@@ -65,19 +71,20 @@ export function settle(g: GameState): void {
   if (g.phase !== "playing") return;
   for (let guard = 0; guard < 50; guard++) {
     maybeExpireQuiz(g);
-    maybeSettleAuction(g);
+    maybeExpirePhase(g);
     if (g.phase !== "playing") return;
 
-    // pemain giliran bangkrut (mis. kalah bayar sewa di gilirannya) -> lompati
-    if (g.players[g.currentPlayer]?.bankrupt) {
+    // pemain giliran bangkrut/menyerah -> lompati
+    const cur = g.players[g.currentPlayer];
+    if (cur?.bankrupt || cur?.surrendered) {
       advanceTurn(g);
       continue;
     }
 
-    // cari bot yang punya aksi: pemain giliran, peserta lelang, atau penjawab kuis
+    // cari bot yang punya aksi: pemain giliran atau penjawab kuis
     let acted = false;
     for (const p of g.players) {
-      if (!p.bot || p.bankrupt) continue;
+      if (!p.bot || p.bankrupt || p.surrendered) continue;
       const action = decideBotAction(g, p);
       if (!action) continue;
       // delay alami: bot baru bertindak jika state sudah >1.2 dtk tidak berubah
@@ -93,10 +100,10 @@ export function settle(g: GameState): void {
   }
 }
 
-// lelang/kuis yang sudah lewat deadline harus segera dibereskan tanpa delay bot
+// fase/kuis yang sudah lewat deadline harus segera dibereskan tanpa delay bot
 function isUrgent(g: GameState): boolean {
   const now = Date.now();
-  if (g.auction && now >= g.auction.deadline) return true;
+  if (g.phaseDeadline !== null && now >= g.phaseDeadline) return true;
   if (g.quiz && now >= g.quiz.deadline) return true;
   return false;
 }

@@ -20,7 +20,7 @@ export default function PlayerStrip({ state }: { state: ClientGameState }) {
   );
 
   return (
-    <div className="pointer-events-none absolute left-1/2 top-3 z-20 flex -translate-x-1/2 gap-2 sm:gap-4">
+    <div className="pointer-events-none absolute left-1/2 top-3 z-40 flex -translate-x-1/2 gap-2 sm:gap-4">
       {state.players.map((p, i) => {
         const isTurn = state.phase === "playing" && i === state.currentPlayer;
         return (

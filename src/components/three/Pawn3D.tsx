@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { PawnKind } from "@/lib/types";
 import { pawnPos, pathBetween } from "./layout";
 import PawnModel from "./PawnModel";
+import type { PawnFocusRef } from "./CameraRig";
 
 const STEP_DURATION = 0.28; // detik per petak
 
@@ -18,6 +19,7 @@ export default function Pawn3D({
   count,
   active,
   emote,
+  focusRef,
 }: {
   color: string;
   pawn: PawnKind;
@@ -26,6 +28,7 @@ export default function Pawn3D({
   count: number;
   active?: boolean;
   emote?: { icon: string; at: number } | null;
+  focusRef?: React.MutableRefObject<PawnFocusRef>;
 }) {
   const ref = useRef<THREE.Group>(null);
   const inner = useRef<THREE.Group>(null);
@@ -76,11 +79,17 @@ export default function Pawn3D({
       g.position.y = target[1] + (active ? 0.02 * (1 + Math.sin(t * 4)) : 0);
     }
 
-    // pion aktif sedikit lebih besar
-    const s = active ? 1.15 : 1;
+    // pion aktif sedikit lebih besar; base dikecilkan agar proporsional dgn petak
+    const s = active ? 1.0 : 0.85;
     g.scale.x += (s - g.scale.x) * Math.min(delta * 6, 1);
     g.scale.y = g.scale.x;
     g.scale.z = g.scale.x;
+
+    // pion aktif lapor posisi dunia ke shared ref (untuk kamera follow)
+    if (active && focusRef) {
+      focusRef.current.pos.set(g.position.x, g.position.y, g.position.z);
+      focusRef.current.ready = true;
+    }
   });
 
   const showEmote = emote && Date.now() - emote.at < 3000;

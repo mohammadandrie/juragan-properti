@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { BOARD, tilesInGroup, GROUP_COLORS } from "@/lib/board";
+import { BOARD, GROUP_COLORS } from "@/lib/board";
 import { ClientGameState, GameAction } from "@/lib/types";
 import PlayerStrip from "./hud/PlayerStrip";
 import FloatingLog from "./hud/FloatingLog";
 import ActionDock from "./hud/ActionDock";
-import AuctionOverlay from "./hud/AuctionOverlay";
+import InteractionOverlay from "./hud/InteractionOverlay";
+import SurrenderButton from "./hud/SurrenderButton";
 import QuizOverlay from "./hud/QuizOverlay";
 import LobbyOverlay from "./hud/LobbyOverlay";
 import { EventBanner, CardReveal } from "./hud/Banners";
+import DiceInfo from "./hud/DiceInfo";
 import CanvasBoundary from "./three/CanvasBoundary";
 import { sfx, setMuted } from "@/lib/sfx";
 
@@ -29,6 +31,9 @@ export default function GameClient({ code }: { code: string }) {
   const [notFound, setNotFound] = useState(false);
   const [propsOpen, setPropsOpen] = useState(false);
   const [mute, setMute] = useState(false);
+  const [cameraMode, setCameraMode] = useState<"overview" | "followPawn">("overview");
+  const [focusTile, setFocusTile] = useState<number | null>(null);
+  const [resetSignal, setResetSignal] = useState(0);
   const tokenRef = useRef<string | null>(null);
   const prevState = useRef<ClientGameState | null>(null);
 
@@ -41,8 +46,6 @@ export default function GameClient({ code }: { code: string }) {
     if (state.lastCard && state.lastCard.at !== (p.lastCard?.at ?? 0)) sfx.card();
     if (state.lastEvent && state.lastEvent.at !== (p.lastEvent?.at ?? -1)) sfx.event();
     if (!p.quiz && state.quiz) sfx.quiz();
-    if (!p.auction && state.auction) sfx.auction();
-    if (p.auction && state.auction && state.auction.highBid > p.auction.highBid) sfx.auction();
     if (!p.winner && state.winner) sfx.win();
     const meNow = state.players.find((x) => x.id === state.you);
     const meOld = p.players.find((x) => x.id === state.you);
@@ -59,6 +62,11 @@ export default function GameClient({ code }: { code: string }) {
   useEffect(() => {
     tokenRef.current = localStorage.getItem(`jp:${code}`);
   }, [code]);
+
+  // bersihkan fokus preview tile saat tak ada lagi keputusan sewa
+  useEffect(() => {
+    if (state && !state.pendingRent) setFocusTile(null);
+  }, [state?.pendingRent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = useCallback(async () => {
     const token = tokenRef.current;
@@ -119,23 +127,16 @@ export default function GameClient({ code }: { code: string }) {
     );
   }
 
-  // properti yang bisa dibangun
-  const buildable = new Set<number>();
+  // aset yang bisa dijual bebas saat giliranku (tidak sedang ada interaksi pending)
+  const pending =
+    state.pendingBuy !== null ||
+    state.pendingRent !== null ||
+    state.pendingUpgrade !== null ||
+    state.quiz !== null;
   const sellable = new Set<number>();
-  if (myTurn && me) {
+  if (myTurn && me && !pending) {
     for (const t of BOARD) {
-      if (t.type !== "property") continue;
-      const own = state.ownership[t.id];
-      if (own?.owner !== me.id) continue;
-      const group = tilesInGroup(t.group!);
-      const complete = group.every((g) => state.ownership[g.id]?.owner === me.id);
-      if (own.houses > 0) {
-        const maxH = Math.max(...group.map((g) => state.ownership[g.id].houses));
-        if (own.houses >= maxH) sellable.add(t.id);
-      }
-      if (!complete || own.houses >= 5 || me.money < (t.houseCost ?? 0)) continue;
-      const minH = Math.min(...group.map((g) => state.ownership[g.id].houses));
-      if (own.houses <= minH) buildable.add(t.id);
+      if (state.ownership[t.id]?.owner === me.id) sellable.add(t.id);
     }
   }
 
@@ -157,8 +158,11 @@ export default function GameClient({ code }: { code: string }) {
         <CanvasBoundary>
           <Board3D
             state={state}
-            buildable={buildable}
-            onTileClick={(id) => buildable.has(id) && act({ type: "build", tile: id })}
+            sellable={sellable}
+            onTileClick={(id) => sellable.has(id) && act({ type: "sell", tile: id })}
+            cameraMode={cameraMode}
+            focusTile={focusTile}
+            resetSignal={resetSignal}
           />
         </CanvasBoundary>
       </div>
@@ -168,13 +172,24 @@ export default function GameClient({ code }: { code: string }) {
       <FloatingLog log={state.log} />
       <EventBanner state={state} />
       <CardReveal state={state} />
+      <DiceInfo state={state} />
       <ActionDock state={state} myTurn={myTurn} me={me} act={act} />
-      <AuctionOverlay state={state} me={me} act={act} />
+      <SurrenderButton
+        show={
+          state.phase === "playing" &&
+          !!me &&
+          !me.bot &&
+          !me.bankrupt &&
+          !me.surrendered
+        }
+        act={act}
+      />
+      <InteractionOverlay state={state} me={me} act={act} onPreviewTile={setFocusTile} />
       <QuizOverlay state={state} me={me} act={act} />
       <LobbyOverlay state={state} me={me} act={act} code={code} />
 
       {/* giliranmu! */}
-      {myTurn && state.canRoll && !state.auction && !state.quiz && state.pendingBuy === null && (
+      {myTurn && state.canRoll && !pending && (
         <p className="pointer-events-none absolute left-1/2 top-1/4 z-10 -translate-x-1/2 animate-[dropIn_0.5s_cubic-bezier(0.34,1.56,0.64,1)] text-2xl font-black tracking-widest text-amber-300 drop-shadow-[0_0_24px_rgba(251,191,36,0.7)]">
           GILIRANMU!
         </p>
@@ -219,15 +234,7 @@ export default function GameClient({ code }: { code: string }) {
                       style={{ background: t.group ? GROUP_COLORS[t.group] : "#64748b" }}
                     />
                     <span className="flex-1 truncate">{t.name}</span>
-                    {own.houses > 0 && <span>{own.houses === 5 ? "🏨" : "🏠".repeat(own.houses)}</span>}
-                    {myTurn && buildable.has(t.id) && (
-                      <button
-                        onClick={() => act({ type: "build", tile: t.id })}
-                        className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-emerald-950 hover:bg-emerald-400"
-                      >
-                        +🏠
-                      </button>
-                    )}
+                    {own.level > 1 && <span>{own.level === 5 ? "🏨" : "🏠".repeat(own.level - 1)}</span>}
                     {myTurn && sellable.has(t.id) && (
                       <button
                         onClick={() => act({ type: "sell", tile: t.id })}
@@ -243,6 +250,39 @@ export default function GameClient({ code }: { code: string }) {
           )}
         </div>
       )}
+
+      {/* toggle kamera (kanan atas) */}
+      <div className="absolute right-3 top-3 z-30 flex gap-1.5">
+        <button
+          onClick={() => setCameraMode("overview")}
+          className={`rounded-full px-3 py-1.5 text-[11px] font-bold backdrop-blur ring-1 transition ${
+            cameraMode === "overview"
+              ? "bg-amber-400 text-amber-950 ring-amber-300"
+              : "bg-black/50 text-white ring-white/15 hover:bg-black/70"
+          }`}
+          title="Kamera papan"
+        >
+          🗺️ Papan
+        </button>
+        <button
+          onClick={() => setCameraMode("followPawn")}
+          className={`rounded-full px-3 py-1.5 text-[11px] font-bold backdrop-blur ring-1 transition ${
+            cameraMode === "followPawn"
+              ? "bg-amber-400 text-amber-950 ring-amber-300"
+              : "bg-black/50 text-white ring-white/15 hover:bg-black/70"
+          }`}
+          title="Kamera ikuti pion"
+        >
+          🎯 Pion
+        </button>
+        <button
+          onClick={() => setResetSignal((s) => s + 1)}
+          className="rounded-full bg-black/50 px-3 py-1.5 text-[11px] font-bold text-white ring-1 ring-white/15 backdrop-blur hover:bg-black/70 transition"
+          title="Reset kamera"
+        >
+          ↺ Reset
+        </button>
+      </div>
 
       {/* tombol mute (kanan bawah) */}
       <button

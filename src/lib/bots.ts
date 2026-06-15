@@ -1,6 +1,6 @@
 import { GameState, GameAction, Player, BotPersona } from "./types";
-import { BOARD, tilesInGroup } from "./board";
-import { MIN_INCREMENT } from "./engine/auction";
+import { BOARD } from "./board";
+import { buyCost, sellValue } from "./money";
 import { QUIZ_QUESTIONS } from "./quiz";
 
 export const BOT_PROFILES: Record<BotPersona, { name: string; color: string; pawn: Player["pawn"] }> = {
@@ -8,6 +8,11 @@ export const BOT_PROFILES: Record<BotPersona, { name: string; color: string; paw
   hemat: { name: "Bu Hemat", color: "#a855f7", pawn: "pinisi" },
   untung: { name: "Si Untung", color: "#f59e0b", pawn: "bajaj" },
 };
+
+// Cadangan kas minimal yang bot pertahankan sebelum belanja.
+function reserve(persona: BotPersona): number {
+  return persona === "hemat" ? 8_000_000 : persona === "jago" ? 2_000_000 : 5_000_000;
+}
 
 // Tentukan satu aksi bot untuk state sekarang; null = tidak ada (tunggu).
 // Dipanggil berulang oleh tick server sampai giliran bot selesai.
@@ -23,71 +28,80 @@ export function decideBotAction(g: GameState, bot: Player): GameAction | null {
     return { type: "answerQuiz", choice };
   }
 
-  // --- lelang: semua bot boleh ikut, gaya beda ---
-  if (g.auction) {
-    const a = g.auction;
-    if (a.passed.includes(bot.id)) return null;
-    if (a.highBidder === bot.id) return null; // sudah tertinggi, tunggu
-    const tile = BOARD[a.tile];
-    const value = tile.price ?? 100;
-    // batas bid per kepribadian
-    const cap =
-      persona === "jago"
-        ? Math.min(value * 1.3, bot.money * 0.7)
-        : persona === "hemat"
-          ? Math.min(value * 0.6, bot.money * 0.3)
-          : Math.min(value * (0.5 + Math.random() * 0.8), bot.money * 0.5);
-    const nextBid = a.highBid + MIN_INCREMENT;
-    if (nextBid <= cap && nextBid <= bot.money) {
-      return { type: "bid", amount: nextBid };
+  if (!isMyTurn) return null;
+
+  // --- bayar sewa ---
+  if (g.pendingRent && g.pendingRent.playerId === bot.id) {
+    const pr = g.pendingRent;
+    if (bot.money >= pr.amount) return { type: "payRentCash" };
+    // kurang uang: jual aset termurah dulu sampai cukup
+    const owned = ownedSorted(g, bot);
+    const toSell: number[] = [];
+    let cash = bot.money;
+    for (const id of owned) {
+      if (cash >= pr.amount) break;
+      toSell.push(id);
+      cash += sellValue(g.ownership[id].totalInvestment);
     }
-    return { type: "passAuction" };
+    if (cash >= pr.amount && toSell.length > 0) return { type: "sellAndPay", tiles: toSell };
+    // tetap kurang: pinjam bank kalau belum pernah
+    if (!bot.hasUsedBankLoan) return { type: "bankLoan" };
+    // pasrah: jual semua lalu bayar (forcePay otomatis menuntaskan saat expire),
+    // tapi bot tetap coba bayar tunai agar engine memproses kekurangan.
+    return { type: "sellAndPay", tiles: owned };
   }
 
-  if (!isMyTurn) return null;
+  // --- tawaran beli kota kosong ---
+  if (g.pendingBuy && g.pendingBuy.playerId === bot.id) {
+    const pb = g.pendingBuy;
+    const tile = BOARD[pb.tile];
+    const base = tile.price ?? 0;
+    // level yang mampu & mau dibeli bot
+    const minReserve = reserve(persona);
+    let level = 0;
+    for (let l = pb.maxLevel; l >= 1; l--) {
+      if (bot.money - buyCost(base, l) >= minReserve) {
+        level = l;
+        break;
+      }
+    }
+    if (level === 0) return { type: "skipBuy" };
+    // kepribadian: hemat lebih konservatif soal level
+    if (persona === "hemat" && level > 2) level = Math.min(level, 2);
+    if (persona === "untung" && Math.random() < 0.3) return { type: "skipBuy" };
+    return { type: "buyLevel", level };
+  }
+
+  // --- tawaran upgrade kota sendiri ---
+  if (g.pendingUpgrade && g.pendingUpgrade.playerId === bot.id) {
+    const pu = g.pendingUpgrade;
+    const minReserve = reserve(persona);
+    const wantUpgrade =
+      persona === "jago"
+        ? bot.money - pu.cost >= minReserve
+        : persona === "hemat"
+          ? bot.money - pu.cost >= minReserve * 2
+          : bot.money - pu.cost >= minReserve && Math.random() < 0.7;
+    return wantUpgrade ? { type: "upgrade" } : { type: "skipUpgrade" };
+  }
 
   // --- penjara ---
   if (bot.inJail && g.canRoll) {
     if (bot.jailCards > 0) return { type: "useJailCard" };
-    if (persona === "jago" && bot.money > 200) return { type: "payJail" };
+    if (persona === "jago" && bot.money > 5_000_000) return { type: "payJail" };
     // sisanya coba lempar dobel dulu (roll di bawah)
-  }
-
-  // --- tawaran beli ---
-  if (g.pendingBuy !== null) {
-    const tile = BOARD[g.pendingBuy];
-    const price = tile.price ?? 0;
-    const wantBuy =
-      persona === "jago"
-        ? bot.money >= price // beli hampir apa saja
-        : persona === "hemat"
-          ? bot.money >= price * 3 // hanya kalau kas tebal
-          : Math.random() < 0.6 && bot.money >= price * 1.5;
-    return wantBuy ? { type: "buy" } : { type: "skip" };
   }
 
   // --- lempar dadu ---
   if (g.canRoll) return { type: "roll" };
 
-  // --- bangun rumah sebelum akhiri giliran ---
-  const buildTarget = findBuildTarget(g, bot, persona);
-  if (buildTarget !== null) return { type: "build", tile: buildTarget };
-
   return { type: "endTurn" };
 }
 
-function findBuildTarget(g: GameState, bot: Player, persona: BotPersona): number | null {
-  const reserve = persona === "hemat" ? 400 : persona === "jago" ? 100 : 250;
-  for (const t of BOARD) {
-    if (t.type !== "property") continue;
-    const own = g.ownership[t.id];
-    if (own?.owner !== bot.id || own.houses >= 5) continue;
-    const group = tilesInGroup(t.group!);
-    if (!group.every((x) => g.ownership[x.id]?.owner === bot.id)) continue;
-    const minH = Math.min(...group.map((x) => g.ownership[x.id].houses));
-    if (own.houses > minH) continue;
-    if (bot.money - (t.houseCost ?? 0) < reserve) continue;
-    return t.id;
-  }
-  return null;
+// id aset bot, diurut dari investasi termurah
+function ownedSorted(g: GameState, bot: Player): number[] {
+  return Object.entries(g.ownership)
+    .filter(([, o]) => o.owner === bot.id)
+    .map(([id]) => Number(id))
+    .sort((a, b) => g.ownership[a].totalInvestment - g.ownership[b].totalInvestment);
 }

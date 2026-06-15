@@ -1,13 +1,28 @@
 import { GameState, Player } from "../types";
-import { BOARD, GAJI_LEWAT_MULAI } from "../board";
+import { BOARD } from "../board";
 import { CHANCE_CARDS, CHEST_CARDS } from "../cards";
 import { QUIZ_QUESTIONS } from "../quiz";
-import { pushLog, currentPlayer, baseRent, rentMultiplier, forcePay, transfer } from "./helpers";
+import {
+  SALARY_PASS_START,
+  JAIL_FINE,
+  upgradeCost,
+  maxBuyLevel,
+  BUY_MS,
+  RENT_MS,
+  UPGRADE_MS,
+} from "../money";
+import {
+  pushLog,
+  currentPlayer,
+  rentDue,
+  rentMultiplier,
+  forcePay,
+  transfer,
+} from "./helpers";
 
 export const QUIZ_TIME_MS = 15_000;
 
 function rng(max: number): number {
-  // acak server-side
   return Math.floor(Math.random() * max);
 }
 
@@ -16,6 +31,8 @@ export function rollDice(g: GameState): void {
   const d1 = rng(6) + 1;
   const d2 = rng(6) + 1;
   g.lastDice = [d1, d2];
+  g.phaseDeadline = null;
+  g.destTile = null;
   const isDouble = d1 === d2;
 
   if (p.inJail) {
@@ -27,11 +44,11 @@ export function rollDice(g: GameState): void {
     } else {
       p.jailTurns++;
       if (p.jailTurns >= 3) {
-        forcePay(g, p, 50, null);
+        forcePay(g, p, JAIL_FINE, null);
         if (!p.bankrupt) {
           p.inJail = false;
           p.jailTurns = 0;
-          pushLog(g, `💸 ${p.name} bayar denda 50jt setelah 3 giliran, lalu jalan.`);
+          pushLog(g, `💸 ${p.name} bayar denda setelah 3 giliran, lalu jalan.`);
           movePlayer(g, p, d1 + d2);
         }
       } else {
@@ -57,7 +74,15 @@ export function rollDice(g: GameState): void {
 
   movePlayer(g, p, d1 + d2);
   // dobel boleh lempar lagi (kecuali sedang ada interaksi pending)
-  g.canRoll = isDouble && !p.bankrupt && g.pendingBuy === null && g.quiz === null && !p.inJail;
+  g.canRoll =
+    isDouble &&
+    !p.bankrupt &&
+    g.pendingBuy === null &&
+    g.pendingRent === null &&
+    g.pendingUpgrade === null &&
+    g.quiz === null &&
+    !p.inJail;
+  if (g.canRoll) g.phaseDeadline = Date.now() + 30_000;
 }
 
 export function sendToJail(g: GameState, p: Player) {
@@ -69,9 +94,11 @@ export function sendToJail(g: GameState, p: Player) {
 export function movePlayer(g: GameState, p: Player, steps: number) {
   const from = p.pos;
   p.pos = (p.pos + steps + 40) % 40;
+  g.destTile = p.pos; // petak tujuan untuk highlight visual
   if (steps > 0 && p.pos < from) {
-    transfer(g, null, p, GAJI_LEWAT_MULAI);
-    pushLog(g, `💰 ${p.name} lewat MULAI, gaji Rp ${GAJI_LEWAT_MULAI}jt.`);
+    transfer(g, null, p, SALARY_PASS_START);
+    p.startPassCount++;
+    pushLog(g, `💰 ${p.name} lewat MULAI, gaji cair!`);
   }
   landOn(g, p);
 }
@@ -86,27 +113,38 @@ export function landOn(g: GameState, p: Player) {
     case "utility": {
       const own = g.ownership[tile.id];
       if (!own) {
+        // kota kosong: tawaran beli (pilih level utk property)
+        const maxLvl = tile.type === "property" ? maxBuyLevel(p.startPassCount) : 1;
         if (p.money >= (tile.price ?? 0)) {
-          g.pendingBuy = tile.id;
+          g.pendingBuy = { playerId: p.id, tile: tile.id, maxLevel: maxLvl };
+          g.phaseDeadline = Date.now() + BUY_MS;
         } else {
           pushLog(g, `🤷 ${p.name} tidak mampu beli ${tile.name}.`);
         }
       } else if (own.owner !== p.id) {
+        // kota lawan: sewa
+        const rent = rentDue(g, tile.id, diceSum);
         const mult = rentMultiplier(g, tile.id);
-        const rent = Math.round(baseRent(g, tile.id, diceSum) * mult);
         const owner = g.players.find((q) => q.id === own.owner)!;
-        if (rent === 0 && mult === 0) {
-          pushLog(g, `🛵 Promo ojol! ${p.name} numpang gratis di ${tile.name}.`);
-        } else if (rent > 0) {
-          forcePay(g, p, rent, owner);
-          pushLog(g, `🏠 ${p.name} bayar sewa Rp ${rent}jt ke ${owner.name} (${tile.name}${mult > 1 ? `, event x${mult}` : ""}).`);
+        if (rent <= 0) {
+          pushLog(g, `🛵 Promo! ${p.name} numpang gratis di ${tile.name}.`);
+        } else {
+          g.pendingRent = { playerId: p.id, tile: tile.id, ownerId: owner.id, amount: rent };
+          g.phaseDeadline = Date.now() + RENT_MS;
+          pushLog(
+            g,
+            `🏠 ${p.name} mendarat di ${tile.name} milik ${owner.name}${mult > 1 ? ` (event x${mult})` : ""}.`
+          );
         }
+      } else {
+        // kota sendiri: mungkin bisa upgrade
+        offerUpgrade(g, p, tile.id);
       }
       break;
     }
     case "tax":
       forcePay(g, p, tile.taxAmount ?? 0, null);
-      pushLog(g, `💸 ${p.name} kena ${tile.name} Rp ${tile.taxAmount}jt.`);
+      pushLog(g, `💸 ${p.name} kena ${tile.name}.`);
       break;
     case "gotojail":
       sendToJail(g, p);
@@ -120,18 +158,40 @@ export function landOn(g: GameState, p: Player) {
       drawCard(g, p, "chest");
       break;
     case "quiz": {
-      // ambil soal berikut dari deck
       if (g.quizDeck.length === 0) {
         g.quizDeck = QUIZ_QUESTIONS.map((_, i) => i).sort(() => Math.random() - 0.5);
       }
       const qIdx = g.quizDeck.pop()!;
       g.quiz = { playerId: p.id, questionIdx: qIdx, deadline: Date.now() + QUIZ_TIME_MS };
+      g.phaseDeadline = Date.now() + QUIZ_TIME_MS;
       pushLog(g, `🧠 ${p.name} masuk Cerdas Cermat!`);
       break;
     }
     default:
       break;
   }
+}
+
+// Tawarkan upgrade jika pemain mendarat di kota sendiri & memenuhi syarat.
+// - Level < 4: bisa naik 1 tingkat jika sudah cukup lewat START & saldo cukup.
+//   (untuk masuk level L, butuh startPassCount >= L-1)
+// - Level 4: bisa upgrade ke level 5 (gedung) HANYA di sini.
+export function offerUpgrade(g: GameState, p: Player, tileId: number) {
+  const tile = BOARD[tileId];
+  if (tile.type !== "property") return;
+  const own = g.ownership[tileId];
+  if (!own || own.owner !== p.id || own.level >= 5) return;
+
+  const toLevel = own.level + 1;
+  // syarat lewat START: untuk level 2 butuh 1x, level 3 butuh 2x, level 4 butuh 3x.
+  // Level 5 tidak butuh START (cukup mendarat di kota sendiri yang sudah level 4).
+  if (toLevel <= 4 && p.startPassCount < toLevel - 1) return;
+
+  const cost = upgradeCost(tile.price ?? 0, toLevel);
+  if (p.money < cost) return;
+
+  g.pendingUpgrade = { playerId: p.id, tile: tileId, toLevel, cost };
+  g.phaseDeadline = Date.now() + UPGRADE_MS;
 }
 
 export function drawCard(g: GameState, p: Player, deck: "chance" | "chest") {
@@ -168,12 +228,12 @@ export function drawCard(g: GameState, p: Player, deck: "chance" | "chest") {
       break;
     case "collectFromAll":
       for (const q of g.players) {
-        if (q.id !== p.id && !q.bankrupt) forcePay(g, q, e.amount, p);
+        if (q.id !== p.id && !q.bankrupt && !q.surrendered) forcePay(g, q, e.amount, p);
       }
       break;
     case "payToAll":
       for (const q of g.players) {
-        if (q.id !== p.id && !q.bankrupt) forcePay(g, p, e.amount, q);
+        if (q.id !== p.id && !q.bankrupt && !q.surrendered) forcePay(g, p, e.amount, q);
       }
       break;
   }

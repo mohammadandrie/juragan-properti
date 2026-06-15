@@ -14,7 +14,7 @@ const PAWN_LIST: { kind: PawnKind; icon: string; label: string }[] = [
 const COLORS = ["#22d3ee", "#f43f5e", "#a3e635", "#fbbf24", "#a78bfa", "#fb923c"];
 
 const BOTS: { persona: BotPersona; icon: string; name: string; desc: string }[] = [
-  { persona: "jago", icon: "😤", name: "Bang Jago", desc: "Agresif, suka bid war" },
+  { persona: "jago", icon: "😤", name: "Bang Jago", desc: "Agresif, rajin upgrade" },
   { persona: "hemat", icon: "🧮", name: "Bu Hemat", desc: "Pelit, nabung terus" },
   { persona: "untung", icon: "🍀", name: "Si Untung", desc: "Random, santai" },
 ];

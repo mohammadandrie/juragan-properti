@@ -1,5 +1,6 @@
 import { GameState, Player } from "../types";
-import { BOARD, QUIZ_REWARD, QUIZ_PENALTY } from "../board";
+import { BOARD } from "../board";
+import { QUIZ_REWARD, QUIZ_PENALTY, fmtMoney } from "../money";
 import { QUIZ_QUESTIONS } from "../quiz";
 import { VIRAL_EVENTS, eventById, EVENT_EVERY_N_ROUNDS } from "../events";
 import { pushLog, alivePlayers, transfer, forcePay } from "./helpers";
@@ -11,13 +12,14 @@ export function answerQuiz(g: GameState, p: Player, choice: number): string | nu
   if (q.playerId !== p.id) return "Bukan kuismu.";
   const question = QUIZ_QUESTIONS[q.questionIdx];
   g.quiz = null;
+  g.phaseDeadline = null;
 
   if (choice === question.answer) {
     transfer(g, null, p, QUIZ_REWARD);
-    pushLog(g, `🎉 ${p.name} jawab benar! Hadiah Rp ${QUIZ_REWARD}jt.`);
+    pushLog(g, `🎉 ${p.name} jawab benar! Hadiah ${fmtMoney(QUIZ_REWARD)}.`);
   } else {
     forcePay(g, p, QUIZ_PENALTY, null);
-    pushLog(g, `❌ ${p.name} salah. Jawaban: ${question.choices[question.answer]}. Denda Rp ${QUIZ_PENALTY}jt.`);
+    pushLog(g, `❌ ${p.name} salah. Jawaban: ${question.choices[question.answer]}. Denda ${fmtMoney(QUIZ_PENALTY)}.`);
   }
   return null;
 }
@@ -29,8 +31,9 @@ export function maybeExpireQuiz(g: GameState, now = Date.now()) {
   const p = g.players.find((x) => x.id === q.playerId)!;
   const question = QUIZ_QUESTIONS[q.questionIdx];
   g.quiz = null;
+  g.phaseDeadline = null;
   forcePay(g, p, QUIZ_PENALTY, null);
-  pushLog(g, `⏰ Waktu habis! Jawaban: ${question.choices[question.answer]}. ${p.name} denda Rp ${QUIZ_PENALTY}jt.`);
+  pushLog(g, `⏰ Waktu habis! Jawaban: ${question.choices[question.answer]}. ${p.name} denda ${fmtMoney(QUIZ_PENALTY)}.`);
 }
 
 // ---- Event viral ----
@@ -54,7 +57,7 @@ export function maybeTriggerEvent(g: GameState) {
       const richest = alivePlayers(g).reduce((a, b) => (a.money >= b.money ? a : b));
       const cut = Math.floor((richest.money * ev.effect.pct) / 100);
       richest.money -= cut;
-      pushLog(g, `📉 ${richest.name} kena potong Rp ${cut}jt!`);
+      pushLog(g, `📉 ${richest.name} kena potong ${fmtMoney(cut)}!`);
       break;
     }
     case "bonusOwner": {
@@ -67,10 +70,10 @@ export function maybeTriggerEvent(g: GameState) {
       const amt = ev.effect.amount;
       if (amt >= 0) {
         transfer(g, null, owner, amt);
-        pushLog(g, `${ev.icon} ${owner.name} dapat Rp ${amt}jt dari ${BOARD[targetTile].name}!`);
+        pushLog(g, `${ev.icon} ${owner.name} dapat ${fmtMoney(amt)} dari ${BOARD[targetTile].name}!`);
       } else {
         forcePay(g, owner, -amt, null);
-        pushLog(g, `${ev.icon} ${owner.name} bayar Rp ${-amt}jt untuk ${BOARD[targetTile].name}.`);
+        pushLog(g, `${ev.icon} ${owner.name} bayar ${fmtMoney(-amt)} untuk ${BOARD[targetTile].name}.`);
       }
       break;
     }

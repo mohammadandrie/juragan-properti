@@ -14,20 +14,20 @@ export const VIRAL_EVENTS: ViralEvent[] = [
   {
     id: "konser",
     title: "Konser Akbar!",
-    desc: "Band internasional manggung. Pemilik kota tempat konser dapat Rp 200jt!",
+    desc: "Band internasional manggung. Pemilik kota tempat konser dapat Rp3 jt!",
     icon: "🎸",
     good: true,
     rounds: 0,
-    effect: { kind: "bonusOwner", tile: -1, amount: 200 }, // tile diisi acak saat trigger
+    effect: { kind: "bonusOwner", tile: -1, amount: 3_000_000 }, // tile diisi acak saat trigger
   },
   {
     id: "thr",
     title: "THR Cair Nasional!",
-    desc: "Pemerintah cairkan THR. Semua pemain dapat Rp 100jt. Hujan uang!",
+    desc: "Pemerintah cairkan THR. Semua pemain dapat Rp1,5 jt. Hujan uang!",
     icon: "💸",
     good: true,
     rounds: 0,
-    effect: { kind: "moneyAll", amount: 100 },
+    effect: { kind: "moneyAll", amount: 1_500_000 },
   },
   {
     id: "promo-ojol",
@@ -50,20 +50,20 @@ export const VIRAL_EVENTS: ViralEvent[] = [
   {
     id: "banjir",
     title: "Banjir Rob!",
-    desc: "Hujan deras semalaman. Satu kota terendam — pemiliknya bayar perbaikan Rp 80jt.",
+    desc: "Hujan deras semalaman. Satu kota terendam — pemiliknya bayar perbaikan Rp1,2 jt.",
     icon: "🌊",
     good: false,
     rounds: 0,
-    effect: { kind: "bonusOwner", tile: -1, amount: -80 },
+    effect: { kind: "bonusOwner", tile: -1, amount: -1_200_000 },
   },
   {
     id: "bbm-naik",
     title: "BBM Naik!",
-    desc: "Harga bensin melonjak. Semua pemain bayar ongkos Rp 50jt.",
+    desc: "Harga bensin melonjak. Semua pemain bayar ongkos Rp800 rb.",
     icon: "⛽",
     good: false,
     rounds: 0,
-    effect: { kind: "moneyAll", amount: -50 },
+    effect: { kind: "moneyAll", amount: -800_000 },
   },
   {
     id: "pinjol",
@@ -77,11 +77,11 @@ export const VIRAL_EVENTS: ViralEvent[] = [
   {
     id: "dbd",
     title: "DBD Mewabah!",
-    desc: "Musim hujan, nyamuk merajalela. Semua pemain bayar fogging Rp 30jt.",
+    desc: "Musim hujan, nyamuk merajalela. Semua pemain bayar fogging Rp500 rb.",
     icon: "🦟",
     good: false,
     rounds: 0,
-    effect: { kind: "moneyAll", amount: -30 },
+    effect: { kind: "moneyAll", amount: -500_000 },
   },
   {
     id: "harga-cabai",
