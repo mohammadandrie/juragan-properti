@@ -153,7 +153,7 @@ function Scene({
             ownerColor={owner?.color}
             highlight={highlightSet.has(tile.id)}
             pulse={tile.id === lastTile && !moving}
-            dest={state.destTile === tile.id && (destActive || moving)}
+            dest={state.destTile === tile.id && !!destActive}
             onClick={() => onTileClick?.(tile.id)}
           />
         );
