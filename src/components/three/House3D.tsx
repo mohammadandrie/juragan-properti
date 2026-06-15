@@ -127,6 +127,47 @@ function Building({ level, color }: { level: number; color: string }) {
   }
 }
 
+// Marker untuk bandara: menara ATC kecil.
+function AirportMarker({ color }: { color: string }) {
+  return (
+    <group>
+      <mesh castShadow position={[0, 0.18, 0]}>
+        <cylinderGeometry args={[0.06, 0.09, 0.36, 8]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.2} />
+      </mesh>
+      <mesh castShadow position={[0, 0.4, 0]}>
+        <boxGeometry args={[0.18, 0.08, 0.18]} />
+        <meshStandardMaterial color="#1e293b" />
+      </mesh>
+      <mesh position={[0, 0.49, 0]}>
+        <cylinderGeometry args={[0.004, 0.004, 0.12, 6]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} />
+      </mesh>
+    </group>
+  );
+}
+
+// Marker untuk utilitas: tiang listrik kecil.
+function UtilityMarker({ color }: { color: string }) {
+  return (
+    <group>
+      <mesh castShadow position={[0, 0.16, 0]}>
+        <cylinderGeometry args={[0.025, 0.04, 0.32, 6]} />
+        <meshStandardMaterial color="#475569" />
+      </mesh>
+      {/* lengan atas */}
+      <mesh castShadow position={[0, 0.34, 0]}>
+        <boxGeometry args={[0.22, 0.02, 0.02]} />
+        <meshStandardMaterial color="#94a3b8" />
+      </mesh>
+      <mesh position={[0, 0.28, 0]}>
+        <sphereGeometry args={[0.04, 8, 8]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
 export default function House3D({
   tileId,
   level,
@@ -137,16 +178,26 @@ export default function House3D({
   ownerColor?: string;
 }) {
   const t = tileTransform(tileId);
-  // hanya properti (kota) yang punya bangunan; bandara/utilitas tidak
-  if (level < 1 || BOARD[tileId]?.type !== "property") return null;
+  const tile = BOARD[tileId];
+  if (!tile || level < 1) return null;
 
-  // skala global agar tinggi tower tetap dalam batas pandang & tidak menutup teks
-  const scale = 0.85;
   const color = ownerColor ?? "#34d399";
+  const scale = 1.05;
+
+  // Bandara & Utilitas dapat marker tetap (tak tergantung level karena tak bisa upgrade)
+  if (tile.type === "airport" || tile.type === "utility") {
+    return (
+      <group position={[t.x, 0.15, t.z]} rotation={[0, t.rotY, 0]} scale={scale}>
+        <group position={[0, 0, -t.d / 2 + 0.18]}>
+          {tile.type === "airport" ? <AirportMarker color={color} /> : <UtilityMarker color={color} />}
+        </group>
+      </group>
+    );
+  }
+  if (tile.type !== "property") return null;
 
   return (
     <group position={[t.x, 0.15, t.z]} rotation={[0, t.rotY, 0]} scale={scale}>
-      {/* geser ke tepi atas tile (zona bangunan), jauh dari pion di tengah */}
       <group position={[0, 0, -t.d / 2 + 0.18]}>
         <Building level={level} color={color} />
       </group>

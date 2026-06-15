@@ -17,19 +17,20 @@ import World3D from "./World3D";
 
 function Scene({
   state,
-  sellable,
+  highlightTiles,
   onTileClick,
   cameraMode,
   focusTile,
   resetSignal,
 }: {
   state: ClientGameState;
-  sellable: Set<number>;
+  highlightTiles: number[];
   onTileClick?: (id: number) => void;
   cameraMode: CameraMode;
   focusTile: number | null;
   resetSignal: number;
 }) {
+  const highlightSet = new Set(highlightTiles);
   if (!state || !state.players.length) return null;
   const alive = state.players.filter((p) => !p.bankrupt);
   const cur = state.players[state.currentPlayer] ?? state.players[0];
@@ -144,7 +145,7 @@ function Scene({
             key={tile.id}
             tile={tile}
             ownerColor={owner?.color}
-            highlight={sellable.has(tile.id)}
+            highlight={highlightSet.has(tile.id)}
             pulse={tile.id === lastTile && !moving}
             dest={state.destTile === tile.id && moving}
             onClick={() => onTileClick?.(tile.id)}
@@ -203,14 +204,14 @@ function Scene({
 
 export default function Board3D({
   state,
-  sellable,
+  highlightTiles,
   onTileClick,
   cameraMode,
   focusTile,
   resetSignal,
 }: {
   state: ClientGameState;
-  sellable: Set<number>;
+  highlightTiles: number[];
   onTileClick?: (id: number) => void;
   cameraMode: CameraMode;
   focusTile: number | null;
@@ -243,7 +244,7 @@ export default function Board3D({
       <fog attach="fog" args={["#0F172A", 20, 40]} />
       <Scene
         state={state}
-        sellable={sellable}
+        highlightTiles={highlightTiles}
         onTileClick={onTileClick}
         cameraMode={cameraMode}
         focusTile={focusTile}

@@ -105,7 +105,7 @@ export function declareBankrupt(g: GameState, p: Player) {
   for (const [id, own] of Object.entries(g.ownership)) {
     if (own.owner === p.id) delete g.ownership[Number(id)];
   }
-  pushLog(g, `💀 ${p.name} bangkrut!`);
+  pushLog(g, `💀 ${p.name} dinyatakan bangkrut dan keluar dari permainan.`);
   checkWinner(g);
 }
 
@@ -114,7 +114,7 @@ export function checkWinner(g: GameState) {
   if (alive.length === 1) {
     g.winner = alive[0].id;
     g.phase = "ended";
-    pushLog(g, `🏆 ${alive[0].name} memenangkan permainan!`);
+    pushLog(g, `🏆 ${alive[0].name} memenangkan permainan sebagai pemain terakhir yang bertahan.`);
   }
 }
 
@@ -130,7 +130,7 @@ export function forcePay(g: GameState, p: Player, amount: number, to: Player | n
     const refund = Math.floor(g.ownership[id].totalInvestment / 2 / 10_000) * 10_000;
     delete g.ownership[id];
     p.money += refund;
-    pushLog(g, `📉 ${p.name} terpaksa menjual ${BOARD[id].name}.`);
+    pushLog(g, `📉 ${p.name} terpaksa menjual ${BOARD[id].name} untuk membayar kewajiban.`);
   }
   if (p.money >= amount) {
     transfer(g, p, to, amount);

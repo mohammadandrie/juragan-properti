@@ -8,6 +8,7 @@ import { ClientGameState, GameAction } from "@/lib/types";
 import PlayerPanel from "./hud/PlayerPanel";
 import ActionPanel from "./hud/ActionPanel";
 import PropertyInspector from "./hud/PropertyInspector";
+import PropertyListPanel from "./hud/PropertyListPanel";
 import QuizOverlay from "./hud/QuizOverlay";
 import LobbyOverlay from "./hud/LobbyOverlay";
 import { EventBanner, CardReveal } from "./hud/Banners";
@@ -19,16 +20,18 @@ const Board3D = dynamic(() => import("./three/Board3D"), {
   ssr: false,
   loading: () => (
     <div className="flex h-full w-full items-center justify-center bg-[#0F172A] text-amber-300/80 animate-pulse">
-      Menyiapkan papan 3D…
+      Menyiapkan papan…
     </div>
   ),
 });
 
-// Durasi animasi pion (klien) untuk MENAHAN reveal interaksi sampai pion sampai.
-// Selaras dengan Pawn3D: START_DELAY 0.75s + ~0.3s per petak + sisa mendarat.
+// Selaras Pawn3D: dadu mengacak ~1s + START_DELAY 0.4s untuk baca angka,
+// lalu pion jalan ~0.3s/petak.
+const DICE_SPIN_MS = 1000;
+const READ_MS = 400;
 function moveDurationMs(steps: number): number {
   const s = Math.min(Math.abs(steps), 12);
-  return 850 + s * 300;
+  return DICE_SPIN_MS + READ_MS + s * 300;
 }
 
 export default function GameClient({ code }: { code: string }) {
@@ -41,9 +44,13 @@ export default function GameClient({ code }: { code: string }) {
   const [focusTile, setFocusTile] = useState<number | null>(null);
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
-  // Gating animasi: tahan reveal beli/sewa/kartu/quiz sampai pion selesai jalan.
+  const [highlightTiles, setHighlightTiles] = useState<number[]>([]);
+  // mode UI: tampilkan panel list properti (kamera otomatis ke topDown)
+  const [showPropList, setShowPropList] = useState(false);
+  const prevCamRef = useRef<CameraMode>("followPawn");
+  // Gating animasi: tahan reveal interaksi sampai pion sampai tujuan.
   const [gateUntil, setGateUntil] = useState(0);
-  const [nowTick, setNowTick] = useState(0); // dipaksa berubah saat gate berakhir
+  const [, setNowTick] = useState(0);
   const tokenRef = useRef<string | null>(null);
   const prevState = useRef<ClientGameState | null>(null);
 
@@ -68,7 +75,7 @@ export default function GameClient({ code }: { code: string }) {
     const isMyTurnNow = state.players[state.currentPlayer]?.id === state.you;
     if (!wasMyTurn && isMyTurnNow && state.phase === "playing") sfx.turn();
 
-    // pion berpindah → mulai gating (dadu mendarat → angka → pion jalan → sampai)
+    // pion berpindah → mulai gating
     let maxSteps = 0;
     for (const pl of state.players) {
       const old = p.players.find((q) => q.id === pl.id);
@@ -77,25 +84,25 @@ export default function GameClient({ code }: { code: string }) {
         maxSteps = Math.max(maxSteps, steps);
       }
     }
-    if (maxSteps > 0) {
-      const until = Date.now() + moveDurationMs(maxSteps);
-      setGateUntil(until);
-    }
+    if (maxSteps > 0) setGateUntil(Date.now() + moveDurationMs(maxSteps));
   }, [state]);
 
-  // saat gate aktif, paksa re-render tepat ketika berakhir agar reveal muncul
+  // paksa render saat gate berakhir
   useEffect(() => {
     if (gateUntil <= Date.now()) return;
     const t = setTimeout(() => setNowTick((n) => n + 1), gateUntil - Date.now() + 30);
     return () => clearTimeout(t);
   }, [gateUntil]);
 
-  const animating = gateUntil > Date.now();
+  const now = Date.now();
+  const animating = gateUntil > now;
+  // dadu masih mengacak (jangan tampilkan angka)
+  const diceSpinning = animating && gateUntil - now > moveDurationMs(0) - DICE_SPIN_MS;
 
-  // jam mundur batas waktu game (tick tiap detik)
+  // jam mundur batas waktu + countdown giliran
   const [clock, setClock] = useState(Date.now());
   useEffect(() => {
-    const t = setInterval(() => setClock(Date.now()), 1000);
+    const t = setInterval(() => setClock(Date.now()), 500);
     return () => clearInterval(t);
   }, []);
 
@@ -149,6 +156,19 @@ export default function GameClient({ code }: { code: string }) {
     setState(data);
   }
 
+  // Toggle list properti milikku — kamera berpindah ke topDown saat dibuka.
+  function togglePropList() {
+    if (showPropList) {
+      setShowPropList(false);
+      setHighlightTiles([]);
+      setCameraMode(prevCamRef.current);
+    } else {
+      prevCamRef.current = cameraMode;
+      setShowPropList(true);
+      setCameraMode("topDown");
+    }
+  }
+
   if (notFound) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#0F172A] p-4">
@@ -162,33 +182,35 @@ export default function GameClient({ code }: { code: string }) {
   if (!state || !state.players.length) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#0F172A]">
-        <p className="text-xl font-semibold text-amber-300 animate-pulse">Memuat room…</p>
+        <p className="text-xl font-semibold text-amber-300 animate-pulse">Memuat ruangan…</p>
       </main>
     );
   }
 
-  // aset yang bisa dijual bebas saat giliranku (tidak sedang interaksi pending)
-  const pending =
-    state.pendingBuy !== null ||
-    state.pendingRent !== null ||
-    state.pendingUpgrade !== null ||
-    state.quiz !== null;
-  const sellable = new Set<number>();
-  if (myTurn && me && !pending && !animating) {
-    for (const t of BOARD) {
-      if (state.ownership[t.id]?.owner === me.id) sellable.add(t.id);
-    }
-  }
-
   const winner = state.winner ? state.players.find((p) => p.id === state.winner) : null;
   const diceSum = state.lastDice ? state.lastDice[0] + state.lastDice[1] : null;
-  // sisa waktu game (mm:ss); null bila tanpa batas / belum mulai
+
+  // jam mundur batas waktu game (mm:ss)
   const remainMs = state.endsAt !== null ? Math.max(0, state.endsAt - clock) : null;
   const remainStr =
     remainMs !== null
       ? `${Math.floor(remainMs / 60000)}:${String(Math.floor((remainMs % 60000) / 1000)).padStart(2, "0")}`
       : null;
   const remainUrgent = remainMs !== null && remainMs <= 60_000;
+
+  // countdown giliran (sebelum di-takeover bot): tampilkan saat aku giliran &
+  // belum lempar dadu, ada deadline aktif.
+  const turnSecsLeft =
+    myTurn && state.canRoll && state.phaseDeadline !== null
+      ? Math.max(0, Math.ceil((state.phaseDeadline - clock) / 1000))
+      : null;
+
+  // properti milikku (untuk PropertyListPanel)
+  const myTiles = me
+    ? Object.entries(state.ownership)
+        .filter(([, o]) => o.owner === me.id)
+        .map(([id]) => Number(id))
+    : [];
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-[#0F172A]">
@@ -197,11 +219,8 @@ export default function GameClient({ code }: { code: string }) {
         <CanvasBoundary>
           <Board3D
             state={state}
-            sellable={sellable}
-            onTileClick={(id) => {
-              setSelectedTile(id);
-              if (sellable.has(id)) act({ type: "sell", tile: id });
-            }}
+            highlightTiles={highlightTiles}
+            onTileClick={(id) => setSelectedTile(id)}
             cameraMode={cameraMode}
             focusTile={focusTile}
             resetSignal={resetSignal}
@@ -209,8 +228,8 @@ export default function GameClient({ code }: { code: string }) {
         </CanvasBoundary>
       </section>
 
-      {/* KIRI ATAS: kartu pemain mengambang (tanpa kotak background panel) */}
-      <aside className="pointer-events-none absolute left-2 top-2 z-20 max-h-[calc(100vh-7rem)] w-60 overflow-y-auto">
+      {/* KIRI ATAS: kartu pemain (transparan, tanpa kotak panel) */}
+      <aside className="pointer-events-none absolute left-2 top-2 z-20 max-h-[calc(100vh-9rem)] w-60 overflow-y-auto">
         <div className="pointer-events-auto">
           <PlayerPanel state={state} act={act} />
         </div>
@@ -220,45 +239,44 @@ export default function GameClient({ code }: { code: string }) {
       {remainStr && state.phase === "playing" && (
         <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2">
           <div
-            className={`rounded-full px-4 py-1.5 text-lg font-black tabular-nums backdrop-blur ring-1 ${
+            className={`rounded-full px-5 py-2 text-xl font-black tabular-nums backdrop-blur ring-1 ${
               remainUrgent
                 ? "bg-rose-500/80 text-white ring-rose-300 animate-pulse"
                 : "bg-black/50 text-amber-300 ring-white/15"
             }`}
           >
-            ⏱️ {remainStr}
+            ⏱ {remainStr}
           </div>
         </div>
       )}
 
       {/* overlay di atas board */}
       <div className="pointer-events-none absolute inset-0 z-20">
-        {/* banner event: selalu mounted (event terjadi saat ganti ronde, bukan
-            saat mendarat) — kalau di-gate, remount memicu banner muncul ulang. */}
+        {/* event banner (selalu mount, posisi di bawah timer agar tak bentrok) */}
         <EventBanner state={state} />
         {/* kartu kesempatan/dana umum: ditahan sampai pion sampai tujuan */}
         {!animating && <CardReveal state={state} />}
 
-        {/* angka dadu besar saat animasi (dadu mendarat → angka terbaca) */}
-        {animating && diceSum !== null && state.lastDice && (
-          <div className="pointer-events-none absolute left-1/2 top-10 z-30 -translate-x-1/2 text-center">
-            <div className="flex items-center gap-2">
+        {/* angka dadu — TUNGGU dadu berhenti mengacak baru tampil */}
+        {animating && !diceSpinning && diceSum !== null && state.lastDice && (
+          <div className="pointer-events-none absolute left-1/2 top-[42%] z-30 -translate-x-1/2 text-center">
+            <div className="flex items-center gap-3">
               {state.lastDice.map((d, i) => (
                 <span
                   key={i}
-                  className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-3xl font-black text-slate-900 shadow-lg ring-2 ring-amber-300"
+                  className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-4xl font-black text-slate-900 shadow-xl ring-2 ring-amber-300"
                 >
                   {d}
                 </span>
               ))}
             </div>
-            <div className="mt-1 text-3xl font-black text-amber-300 drop-shadow-[0_0_16px_rgba(251,191,36,0.7)]">
+            <div className="mt-2 text-4xl font-black text-amber-300 drop-shadow-[0_0_20px_rgba(251,191,36,0.8)]">
               {diceSum}
             </div>
           </div>
         )}
 
-        {/* property card: muncul HANYA saat tile diklik (poin 3) */}
+        {/* property card kanan: muncul saat tile diklik */}
         {selectedTile !== null && (
           <div className="pointer-events-auto">
             <PropertyInspector
@@ -269,76 +287,80 @@ export default function GameClient({ code }: { code: string }) {
           </div>
         )}
 
-        {/* kamera control (kanan atas board) */}
+        {/* panel list properti milikku (saat tombol "Propertiku" diklik) */}
+        {showPropList && me && (
+          <div className="pointer-events-auto">
+            <PropertyListPanel
+              state={state}
+              tiles={myTiles}
+              highlightTiles={highlightTiles}
+              onHover={(id) => setHighlightTiles(id === null ? [] : [id])}
+              onClose={togglePropList}
+            />
+          </div>
+        )}
+
+        {/* kontrol kanan-atas: hanya mode kamera + mute */}
         <div className="pointer-events-auto absolute right-2 top-2 z-30 flex gap-1">
-          {(["overview", "followPawn", "cinematic"] as CameraMode[]).map((m) => (
+          {(
+            [
+              ["overview", "🗺 Papan"],
+              ["followPawn", "🎯 Pion"],
+            ] as [CameraMode, string][]
+          ).map(([m, label]) => (
             <button
               key={m}
               onClick={() => setCameraMode(m)}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-bold backdrop-blur ring-1 transition ${
+              className={`rounded-lg px-3 py-1.5 text-sm font-bold backdrop-blur ring-1 transition ${
                 cameraMode === m
                   ? "bg-amber-400 text-amber-950 ring-amber-300"
                   : "bg-black/50 text-white ring-white/15 hover:bg-black/70"
               }`}
             >
-              {m === "overview" ? "🗺️ Papan" : m === "followPawn" ? "🎯 Pion" : "🎬 Sinema"}
+              {label}
             </button>
           ))}
-          <button
-            onClick={() => setResetSignal((s) => s + 1)}
-            className="rounded-lg bg-black/50 px-2.5 py-1.5 text-xs font-bold text-white ring-1 ring-white/15 backdrop-blur hover:bg-black/70 transition"
-            title="Reset kamera (atau klik-ganda papan)"
-          >
-            ↺
-          </button>
           <button
             onClick={() => {
               const m = !mute;
               setMute(m);
               setMuted(m);
             }}
-            className="rounded-lg bg-black/50 px-2.5 py-1.5 text-sm backdrop-blur ring-1 ring-white/15 hover:bg-black/70 transition"
+            className="rounded-lg bg-black/50 px-3 py-1.5 text-base backdrop-blur ring-1 ring-white/15 hover:bg-black/70 transition"
           >
             {mute ? "🔇" : "🔊"}
           </button>
         </div>
 
-        {/* giliranmu! */}
-        {myTurn && state.canRoll && !pending && !animating && (
-          <p className="pointer-events-none absolute left-1/2 top-6 z-10 -translate-x-1/2 animate-[dropIn_0.5s_cubic-bezier(0.34,1.56,0.64,1)] text-2xl font-black tracking-widest text-amber-300 drop-shadow-[0_0_24px_rgba(251,191,36,0.7)]">
-            GILIRANMU!
-          </p>
-        )}
-
         {/* pemenang */}
         {winner && (
-          <div className="pointer-events-auto absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-            <p className="animate-[dropIn_0.8s_cubic-bezier(0.34,1.56,0.64,1)] text-6xl">🏆</p>
-            <p className="mt-3 text-4xl font-black text-amber-300 drop-shadow-[0_0_30px_rgba(251,191,36,0.8)]">
-              {winner.name} MENANG!
+          <div className="pointer-events-auto absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/65 backdrop-blur-sm">
+            <p className="animate-[dropIn_0.8s_cubic-bezier(0.34,1.56,0.64,1)] text-7xl">🏆</p>
+            <p className="mt-3 text-5xl font-black text-amber-300 drop-shadow-[0_0_30px_rgba(251,191,36,0.8)]">
+              {winner.name} MENANG
             </p>
             <p className="mt-2 text-base text-white/70">
               {state.log.slice().reverse().find((l) => l.includes("menang") || l.includes("memenangkan")) ??
-                "Juragan properti sejati! 👑"}
+                ""}
             </p>
             <button
               onClick={() => router.push("/")}
               className="mt-6 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 px-8 py-3 text-lg font-black text-amber-950 shadow-lg hover:scale-105 active:scale-95 transition"
             >
-              🏠 Kembali ke Home
+              🏠 Kembali ke Beranda
             </button>
           </div>
         )}
 
         {/* error toast */}
         {error && (
-          <p className="absolute left-1/2 top-16 z-50 -translate-x-1/2 rounded-full bg-red-500/90 px-4 py-2 text-sm font-bold text-white shadow-lg">
+          <p className="absolute left-1/2 top-20 z-50 -translate-x-1/2 rounded-full bg-red-500/90 px-4 py-2 text-sm font-bold text-white shadow-lg">
             {error}
           </p>
         )}
       </div>
 
-      {/* BAWAH: aksi mengambang (tombol saja, tanpa kotak background) — poin 6 */}
+      {/* BAWAH: aksi mengambang (tombol di tengah) */}
       <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
         <div className="pointer-events-auto">
           <ActionPanel
@@ -347,7 +369,12 @@ export default function GameClient({ code }: { code: string }) {
             me={me}
             act={act}
             onPreviewTile={setFocusTile}
+            onSetHighlight={setHighlightTiles}
             animating={animating}
+            turnSecsLeft={turnSecsLeft}
+            onToggleProps={togglePropList}
+            propsOpen={showPropList}
+            setCameraMode={setCameraMode}
           />
         </div>
       </footer>

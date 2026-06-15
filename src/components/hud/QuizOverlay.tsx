@@ -34,6 +34,8 @@ export default function QuizOverlay({
   const isMine = me?.id === q.playerId;
   const secsLeft = Math.max(0, Math.ceil((q.deadline - now) / 1000));
   const urgent = secsLeft <= 5;
+  // setelah pemain memilih, perlihatkan jawaban benar (hijau) & salah (merah)
+  const revealed = picked !== null;
 
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -65,25 +67,46 @@ export default function QuizOverlay({
 
             {/* pilihan */}
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {question.choices.map((c, i) => (
-                <button
-                  key={i}
-                  disabled={!isMine || picked !== null}
-                  onClick={() => {
-                    setPicked(i);
-                    act({ type: "answerQuiz", choice: i });
-                  }}
-                  className={`rounded-xl px-4 py-3 text-left text-sm font-semibold transition active:scale-95 ${
-                    picked === i
-                      ? "bg-amber-400 text-amber-950 scale-105"
-                      : "bg-white/10 text-white hover:bg-white/20 disabled:opacity-50 disabled:hover:bg-white/10"
-                  }`}
-                >
-                  <span className="mr-2 font-black text-violet-300">{["A", "B", "C", "D"][i]}.</span>
-                  {c}
-                </button>
-              ))}
+              {question.choices.map((c, i) => {
+                const isAnswer = i === question.answer;
+                const isPicked = picked === i;
+                let style = "bg-white/10 text-white hover:bg-white/20";
+                if (revealed) {
+                  if (isAnswer) style = "bg-emerald-500 text-emerald-950 ring-2 ring-emerald-300";
+                  else if (isPicked) style = "bg-rose-600 text-white ring-2 ring-rose-300";
+                  else style = "bg-white/5 text-white/50";
+                } else if (isPicked) {
+                  style = "bg-amber-400 text-amber-950 scale-105";
+                }
+                return (
+                  <button
+                    key={i}
+                    disabled={!isMine || picked !== null}
+                    onClick={() => {
+                      setPicked(i);
+                      act({ type: "answerQuiz", choice: i });
+                    }}
+                    className={`rounded-xl px-4 py-3 text-left text-sm font-semibold transition active:scale-95 disabled:hover:bg-white/10 ${style}`}
+                  >
+                    <span className="mr-2 font-black text-violet-300">{["A", "B", "C", "D"][i]}.</span>
+                    {c}
+                    {revealed && isAnswer && <span className="ml-2">✓</span>}
+                    {revealed && isPicked && !isAnswer && <span className="ml-2">✗</span>}
+                  </button>
+                );
+              })}
             </div>
+            {revealed && (
+              <p
+                className={`mt-3 text-center text-base font-black ${
+                  picked === question.answer ? "text-emerald-300" : "text-rose-300"
+                }`}
+              >
+                {picked === question.answer
+                  ? `🎉 Benar! +${fmtMoney(QUIZ_REWARD)}`
+                  : `❌ Salah. Jawaban: ${question.choices[question.answer]} · −${fmtMoney(QUIZ_PENALTY)}`}
+              </p>
+            )}
           </div>
         </div>
       </div>

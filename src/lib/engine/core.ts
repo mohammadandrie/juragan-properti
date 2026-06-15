@@ -10,6 +10,7 @@ import {
   BUY_MS,
   RENT_MS,
   UPGRADE_MS,
+  fmtMoney,
 } from "../money";
 import {
   pushLog,
@@ -39,7 +40,7 @@ export function rollDice(g: GameState): void {
     if (isDouble) {
       p.inJail = false;
       p.jailTurns = 0;
-      pushLog(g, `🎲 ${p.name} lempar dobel ${d1}, bebas dari penjara!`);
+      pushLog(g, `🎲 ${p.name} melempar dobel ${d1}-${d1}. Bebas dari Penjara.`);
       movePlayer(g, p, d1 + d2);
     } else {
       p.jailTurns++;
@@ -48,11 +49,11 @@ export function rollDice(g: GameState): void {
         if (!p.bankrupt) {
           p.inJail = false;
           p.jailTurns = 0;
-          pushLog(g, `💸 ${p.name} bayar denda setelah 3 giliran, lalu jalan.`);
+          pushLog(g, `💸 ${p.name} membayar denda setelah 3 giliran di Penjara, lalu jalan.`);
           movePlayer(g, p, d1 + d2);
         }
       } else {
-        pushLog(g, `🚔 ${p.name} gagal dobel, tetap di penjara (${p.jailTurns}/3).`);
+        pushLog(g, `🚔 ${p.name} gagal melempar dobel. Tetap di Penjara (${p.jailTurns}/3).`);
       }
     }
     g.canRoll = false;
@@ -63,7 +64,7 @@ export function rollDice(g: GameState): void {
     g.doublesCount++;
     if (g.doublesCount >= 3) {
       sendToJail(g, p);
-      pushLog(g, `🚨 ${p.name} dobel 3x beruntun — ngebut! Masuk penjara.`);
+      pushLog(g, `🚨 ${p.name} melempar dobel tiga kali beruntun. Masuk Penjara.`);
       g.canRoll = false;
       g.doublesCount = 0;
       return;
@@ -98,7 +99,7 @@ export function movePlayer(g: GameState, p: Player, steps: number) {
   if (steps > 0 && p.pos < from) {
     transfer(g, null, p, SALARY_PASS_START);
     p.startPassCount++;
-    pushLog(g, `💰 ${p.name} lewat MULAI, gaji cair!`);
+    pushLog(g, `💰 ${p.name} melewati petak MULAI dan menerima gaji.`);
   }
   landOn(g, p);
 }
@@ -119,22 +120,29 @@ export function landOn(g: GameState, p: Player) {
           g.pendingBuy = { playerId: p.id, tile: tile.id, maxLevel: maxLvl };
           g.phaseDeadline = Date.now() + BUY_MS;
         } else {
-          pushLog(g, `🤷 ${p.name} tidak mampu beli ${tile.name}.`);
+          pushLog(g, `🤷 Saldo ${p.name} tidak cukup untuk membeli ${tile.name}.`);
         }
       } else if (own.owner !== p.id) {
-        // kota lawan: sewa
-        const rent = rentDue(g, tile.id, diceSum);
-        const mult = rentMultiplier(g, tile.id);
-        const owner = g.players.find((q) => q.id === own.owner)!;
-        if (rent <= 0) {
-          pushLog(g, `🛵 Promo! ${p.name} numpang gratis di ${tile.name}.`);
+        // kota lawan: sewa. Lewati hanya jika pemilik bangkrut/menyerah, atau
+        // event "rentFree" aktif. Selain itu WAJIB bayar.
+        const owner = g.players.find((q) => q.id === own.owner);
+        if (!owner || owner.bankrupt || owner.surrendered) {
+          // pemilik sudah tidak aktif, properti otomatis kembali ke bank
+          delete g.ownership[tile.id];
+          pushLog(g, `🏠 ${p.name} mendarat di ${tile.name}. Pemilik tidak aktif; properti kembali ke bank.`);
         } else {
-          g.pendingRent = { playerId: p.id, tile: tile.id, ownerId: owner.id, amount: rent };
-          g.phaseDeadline = Date.now() + RENT_MS;
-          pushLog(
-            g,
-            `🏠 ${p.name} mendarat di ${tile.name} milik ${owner.name}${mult > 1 ? ` (event x${mult})` : ""}.`
-          );
+          const rent = rentDue(g, tile.id, diceSum);
+          const mult = rentMultiplier(g, tile.id);
+          if (rent <= 0) {
+            pushLog(g, `🎟️ ${tile.name}: event sewa gratis sedang berlaku.`);
+          } else {
+            g.pendingRent = { playerId: p.id, tile: tile.id, ownerId: owner.id, amount: rent };
+            g.phaseDeadline = Date.now() + RENT_MS;
+            pushLog(
+              g,
+              `🏠 ${p.name} mendarat di ${tile.name} milik ${owner.name}. Sewa ${mult > 1 ? `(event ×${mult}) ` : ""}wajib dibayar.`
+            );
+          }
         }
       } else {
         // kota sendiri: mungkin bisa upgrade
@@ -144,11 +152,11 @@ export function landOn(g: GameState, p: Player) {
     }
     case "tax":
       forcePay(g, p, tile.taxAmount ?? 0, null);
-      pushLog(g, `💸 ${p.name} kena ${tile.name}.`);
+      pushLog(g, `💸 ${p.name} membayar ${tile.name} sebesar ${fmtMoney(tile.taxAmount ?? 0)}.`);
       break;
     case "gotojail":
       sendToJail(g, p);
-      pushLog(g, `👮 ${p.name} tertangkap! Masuk penjara.`);
+      pushLog(g, `👮 ${p.name} dikirim ke Penjara.`);
       g.canRoll = false;
       break;
     case "chance":
@@ -167,6 +175,13 @@ export function landOn(g: GameState, p: Player) {
       pushLog(g, `🧠 ${p.name} masuk Cerdas Cermat!`);
       break;
     }
+    case "jail":
+      // mendarat di petak Penjara (id 10) = "hanya berkunjung", tidak ditahan
+      pushLog(g, `🛂 ${p.name} sedang berkunjung di Penjara.`);
+      break;
+    case "parking":
+      pushLog(g, `🅿️ ${p.name} berhenti di Parkir Bebas.`);
+      break;
     default:
       break;
   }

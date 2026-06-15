@@ -13,7 +13,7 @@ import {
 } from "./helpers";
 import { rollDice } from "./core";
 import { answerQuiz, maybeExpireQuiz, maybeTriggerEvent, tickEvents } from "./quizEvent";
-import { JAIL_FINE, MAX_ROUNDS, END_AUTO_MS, buyCost, sellValue, fmtMoney } from "../money";
+import { JAIL_FINE, END_AUTO_MS, buyCost, sellValue, fmtMoney } from "../money";
 
 export * from "./helpers";
 export * from "./core";
@@ -68,8 +68,8 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       pushLog(
         g,
         g.timeLimitMin > 0
-          ? `🚀 Permainan dimulai! Batas waktu ${g.timeLimitMin} menit — terkaya menang saat waktu habis.`
-          : "🚀 Permainan dimulai. Main sampai tersisa satu juragan!"
+          ? `🚀 Permainan dimulai. Batas waktu ${g.timeLimitMin} menit. Pemenang ditentukan oleh kekayaan tertinggi.`
+          : "🚀 Permainan dimulai. Berlangsung hingga hanya tersisa satu pemain."
       );
       return null;
     }
@@ -110,7 +110,7 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       if (!pb || pb.playerId !== p.id) return "Tidak ada properti yang ditawarkan.";
       g.pendingBuy = null;
       g.phaseDeadline = null;
-      pushLog(g, `🤷 ${p.name} melewatkan ${BOARD[pb.tile].name}.`);
+      pushLog(g, `🤷 ${p.name} melewatkan penawaran ${BOARD[pb.tile].name}.`);
       return null;
     }
 
@@ -165,7 +165,7 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       const loan = pr.amount - p.money;
       p.hasUsedBankLoan = true;
       transfer(g, null, p, loan);
-      pushLog(g, `🏦 ${p.name} pinjam bank ${fmtMoney(loan)} (sekali seumur game).`);
+      pushLog(g, `🏦 ${p.name} meminjam ${fmtMoney(loan)} dari bank (kuota pinjaman habis).`);
       settleRent(g, p, pr.amount, pr.ownerId, pr.tile);
       return null;
     }
@@ -212,7 +212,7 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       if (!p.bankrupt) {
         p.inJail = false;
         p.jailTurns = 0;
-        pushLog(g, `💸 ${p.name} bayar denda ${fmtMoney(JAIL_FINE)}, bebas!`);
+        pushLog(g, `💸 ${p.name} membayar denda ${fmtMoney(JAIL_FINE)} dan keluar dari Penjara.`);
       }
       return null;
     }
@@ -225,7 +225,7 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       p.jailCards--;
       p.inJail = false;
       p.jailTurns = 0;
-      pushLog(g, `🎟️ ${p.name} pakai Kartu Bebas Penjara!`);
+      pushLog(g, `🎟️ ${p.name} menggunakan Kartu Bebas Penjara.`);
       return null;
     }
 
@@ -387,10 +387,6 @@ export function advanceTurn(g: GameState) {
     g.roundCount++;
     tickEvents(g);
     maybeTriggerEvent(g);
-    if (g.roundCount >= MAX_ROUNDS) {
-      endByNetWorth(g);
-      if (g.phase === "ended") return;
-    }
   }
   g.currentPlayer = next;
   g.canRoll = true;
@@ -400,8 +396,9 @@ export function advanceTurn(g: GameState) {
   g.phaseDeadline = Date.now() + 30_000;
 }
 
-// Akhiri game: pemenang = kekayaan bersih tertinggi. `reason` jadi prefix log.
-function endByNetWorth(g: GameState, reason = `🏁 Batas ${MAX_ROUNDS} putaran!`) {
+// Akhiri game: pemenang = kekayaan tertinggi (tunai + total nilai properti).
+// `reason` jadi prefix log.
+function endByNetWorth(g: GameState, reason = "⏰ Waktu habis!") {
   const alive = alivePlayers(g);
   if (alive.length === 0) return;
   const winner = alive.reduce((a, b) => (netWorth(g, b) > netWorth(g, a) ? b : a));
@@ -409,7 +406,7 @@ function endByNetWorth(g: GameState, reason = `🏁 Batas ${MAX_ROUNDS} putaran!
   g.phase = "ended";
   pushLog(
     g,
-    `${reason} ${winner.name} menang dengan kekayaan ${fmtMoney(netWorth(g, winner))}.`
+    `${reason} ${winner.name} menang dengan total kekayaan ${fmtMoney(netWorth(g, winner))}.`
   );
 }
 

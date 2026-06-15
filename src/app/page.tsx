@@ -49,7 +49,7 @@ export default function Home() {
         </h1>
         <h2 className="text-center text-3xl font-black tracking-[0.3em] text-emerald-400">PROPERTI</h2>
         <p className="mt-2 text-center text-xs text-white/50">
-          Papan 3D · lelang seru · kuis Indonesia · event viral · 2-4 pemain + bot
+          Permainan papan strategi · 2–4 pemain · dukungan bot
         </p>
 
         <div className="mt-8 space-y-4">
@@ -100,7 +100,7 @@ export default function Home() {
         </div>
 
         <p className="mt-10 text-center text-[10px] text-white/30">
-          Harga kota berdasar urutan UMR asli Indonesia 2026 🇮🇩
+          Harga properti diurutkan berdasar UMR provinsi Indonesia.
         </p>
       </div>
     </main>

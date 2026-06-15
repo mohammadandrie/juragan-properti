@@ -38,9 +38,9 @@ export default function LobbyOverlay({
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/50 backdrop-blur-md p-4">
       <div className="w-full max-w-xl">
-        <h2 className="text-center text-2xl font-black text-white drop-shadow">Lobby</h2>
+        <h2 className="text-center text-2xl font-black text-white drop-shadow">Ruang Tunggu</h2>
         <p className="mt-1 text-center text-sm text-white/70">
-          Kode room:{" "}
+          Kode ruangan:{" "}
           <button
             onClick={() => navigator.clipboard?.writeText(code)}
             className="rounded-lg bg-white/10 px-2 py-0.5 font-mono text-lg font-black tracking-widest text-amber-300 hover:bg-white/20"
@@ -73,7 +73,7 @@ export default function LobbyOverlay({
         {/* pilih pion */}
         {me && (
           <>
-            <p className="mt-5 text-center text-xs font-bold uppercase tracking-widest text-white/60">Pilih pionmu</p>
+            <p className="mt-5 text-center text-xs font-bold uppercase tracking-widest text-white/60">Pilih pion Anda</p>
             <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
               {PAWN_LIST.map((pw) => {
                 const taken = takenPawns.has(pw.kind) && pw.kind !== "default";
@@ -182,12 +182,12 @@ export default function LobbyOverlay({
               disabled={state.players.length < 2}
               className="rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-10 py-3 text-lg font-black text-amber-950 shadow-[0_0_40px_-5px_rgba(251,191,36,0.6)] hover:scale-105 active:scale-95 transition disabled:opacity-40 disabled:hover:scale-100"
             >
-              🚀 MULAI ({state.players.length}/4)
+              🚀 Mulai Permainan ({state.players.length}/4)
             </button>
           ) : me ? (
-            <p className="text-sm text-white/60">Menunggu host memulai…</p>
+            <p className="text-sm text-white/60">Menunggu pembuat ruangan memulai permainan…</p>
           ) : (
-            <p className="text-sm text-amber-300/90">Kamu menonton. Gabung lewat halaman utama dengan kode di atas.</p>
+            <p className="text-sm text-amber-300/90">Anda hanya menonton. Gunakan kode di atas untuk bergabung dari beranda.</p>
           )}
         </div>
       </div>
