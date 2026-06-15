@@ -15,8 +15,10 @@ export interface PawnFocusRef {
   ready: boolean;
 }
 
-const OVERVIEW_POS = new THREE.Vector3(0, 11, 9.5);
-const TOPDOWN_POS = new THREE.Vector3(0, 14, 0.001);
+// Default kamera: lebih tinggi & sedikit lebih jauh → papan terlihat utuh,
+// tidak nunduk. Pitch tetap bisa dinaik-turunkan user.
+const OVERVIEW_POS = new THREE.Vector3(0, 13, 11);
+const TOPDOWN_POS = new THREE.Vector3(0, 16, 0.001);
 const CENTER = new THREE.Vector3(0, 0, 0);
 
 // Kamera 3 mode:
@@ -62,7 +64,7 @@ export default function CameraRig({
       c.target.copy(CENTER);
     } else if (mode === "followPawn" && pawnRef.current.ready && isValid(pawnRef.current.pos)) {
       const p = pawnRef.current.pos;
-      camera.position.set(p.x, p.y + 6, p.z + 5.5);
+      camera.position.set(p.x, p.y + 8, p.z + 6);
       c.target.set(p.x, p.y, p.z);
     } else {
       camera.position.copy(OVERVIEW_POS);

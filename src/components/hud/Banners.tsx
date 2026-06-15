@@ -21,7 +21,7 @@ export function EventBanner({ state }: { state: ClientGameState }) {
   const tileName = state.lastEvent.tile != null ? BOARD[state.lastEvent.tile].name : null;
 
   return (
-    <div className="pointer-events-none absolute left-1/2 top-16 z-20 w-full max-w-md -translate-x-1/2 px-4">
+    <div className="pointer-events-none absolute left-1/2 bottom-32 z-20 w-full max-w-md -translate-x-1/2 px-4">
       <div
         className={`animate-[dropIn_0.6s_cubic-bezier(0.34,1.56,0.64,1)] rounded-2xl p-[2px] ${
           ev.good

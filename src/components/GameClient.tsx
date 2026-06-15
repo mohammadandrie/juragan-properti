@@ -44,7 +44,7 @@ export default function GameClient({ code }: { code: string }) {
   const [cameraMode, setCameraMode] = useState<CameraMode>("followPawn");
   const [focusTile, setFocusTile] = useState<number | null>(null);
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
-  const [resetSignal] = useState(0);
+  const [resetSignal, setResetSignal] = useState(0);
   const [highlightTiles, setHighlightTiles] = useState<number[]>([]);
   const [showPropList, setShowPropList] = useState(false);
   const prevCamRef = useRef<CameraMode>("followPawn");
@@ -200,6 +200,10 @@ export default function GameClient({ code }: { code: string }) {
       setShowPropList(false);
       setHighlightTiles([]);
       setCameraMode(prevCamRef.current);
+      // reset kamera ke posisi DEFAULT mode yang dikembalikan (bukan sisa
+      // posisi user terakhir) — sesuai permintaan: tutup propertiku = papan
+      // kelihatan utuh dari sudut default.
+      setResetSignal((s) => s + 1);
     } else {
       prevCamRef.current = cameraMode;
       setShowPropList(true);
@@ -266,6 +270,7 @@ export default function GameClient({ code }: { code: string }) {
             resetSignal={resetSignal}
             onDiceSettled={handleDiceSettled}
             movingPawnIsLocal={movingPawnIsLocal && inMove}
+            destActive={showingDiceNumber && (inHold || inMove)}
           />
         </CanvasBoundary>
       </section>
@@ -291,7 +296,9 @@ export default function GameClient({ code }: { code: string }) {
               ⏱ {remainStr}
             </div>
           )}
-          {/* angka dadu — muncul SETELAH dadu berhenti animasinya */}
+          {/* angka dadu — muncul SETELAH dadu berhenti animasinya. Sum
+              didesain sebagai box ke-3 berwarna emas, sejajar dengan kedua
+              dadu, agar terlihat sebagai bagian dari hasil lemparan. */}
           {showingDiceNumber && diceSum !== null && state.lastDice && (
             <div className="animate-[dropIn_0.35s_cubic-bezier(0.34,1.56,0.64,1)] text-center">
               <div className="flex items-center justify-center gap-3">
@@ -303,8 +310,9 @@ export default function GameClient({ code }: { code: string }) {
                     {d}
                   </span>
                 ))}
-                <span className="text-2xl font-black text-amber-300">
-                  = {diceSum}
+                <span className="text-2xl font-black text-white/50">=</span>
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-400 text-3xl font-black text-amber-950 shadow-xl ring-2 ring-amber-300">
+                  {diceSum}
                 </span>
               </div>
             </div>

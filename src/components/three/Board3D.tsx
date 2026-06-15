@@ -24,6 +24,7 @@ function Scene({
   resetSignal,
   onDiceSettled,
   movingPawnIsLocal,
+  destActive,
 }: {
   state: ClientGameState;
   highlightTiles: number[];
@@ -33,6 +34,7 @@ function Scene({
   resetSignal: number;
   onDiceSettled?: () => void;
   movingPawnIsLocal?: boolean;
+  destActive?: boolean;
 }) {
   const highlightSet = new Set(highlightTiles);
   if (!state || !state.players.length) return null;
@@ -151,7 +153,7 @@ function Scene({
             ownerColor={owner?.color}
             highlight={highlightSet.has(tile.id)}
             pulse={tile.id === lastTile && !moving}
-            dest={state.destTile === tile.id && moving}
+            dest={state.destTile === tile.id && (destActive || moving)}
             onClick={() => onTileClick?.(tile.id)}
           />
         );
@@ -215,6 +217,7 @@ export default function Board3D({
   resetSignal,
   onDiceSettled,
   movingPawnIsLocal,
+  destActive,
 }: {
   state: ClientGameState;
   highlightTiles: number[];
@@ -224,11 +227,12 @@ export default function Board3D({
   resetSignal: number;
   onDiceSettled?: () => void;
   movingPawnIsLocal?: boolean;
+  destActive?: boolean;
 }) {
   return (
     <Canvas
       shadows
-      camera={{ position: [0, 9, 8.2], fov: 45 }}
+      camera={{ position: [0, 13, 11], fov: 45 }}
       dpr={1}
       className="!touch-none"
       onCreated={({ gl }) => {
@@ -259,6 +263,7 @@ export default function Board3D({
         resetSignal={resetSignal}
         onDiceSettled={onDiceSettled}
         movingPawnIsLocal={movingPawnIsLocal}
+        destActive={destActive}
       />
     </Canvas>
   );
