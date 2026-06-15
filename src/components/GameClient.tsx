@@ -11,6 +11,7 @@ import AuctionOverlay from "./hud/AuctionOverlay";
 import QuizOverlay from "./hud/QuizOverlay";
 import LobbyOverlay from "./hud/LobbyOverlay";
 import { EventBanner, CardReveal } from "./hud/Banners";
+import CanvasBoundary from "./three/CanvasBoundary";
 import { sfx, setMuted } from "@/lib/sfx";
 
 const Board3D = dynamic(() => import("./three/Board3D"), {
@@ -141,15 +142,25 @@ export default function GameClient({ code }: { code: string }) {
   const winner = state.winner ? state.players.find((p) => p.id === state.winner) : null;
   const myProps = me ? BOARD.filter((t) => state.ownership[t.id]?.owner === me.id) : [];
 
+  if (!state.players.length) {
+    return (
+      <main className="fixed inset-0 overflow-hidden bg-[#060b14] flex items-center justify-center text-amber-300/80 animate-pulse">
+        Menyiapkan game…
+      </main>
+    );
+  }
+
   return (
     <main className="fixed inset-0 overflow-hidden bg-[#060b14]">
       {/* papan = seluruh layar */}
       <div className="absolute inset-0">
-        <Board3D
-          state={state}
-          buildable={buildable}
-          onTileClick={(id) => buildable.has(id) && act({ type: "build", tile: id })}
-        />
+        <CanvasBoundary>
+          <Board3D
+            state={state}
+            buildable={buildable}
+            onTileClick={(id) => buildable.has(id) && act({ type: "build", tile: id })}
+          />
+        </CanvasBoundary>
       </div>
 
       {/* HUD */}

@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Text, ContactShadows, Stars } from "@react-three/drei";
-import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
+import { Text, ContactShadows } from "@react-three/drei";
 import { BOARD } from "@/lib/board";
 import { ClientGameState } from "@/lib/types";
 import { HALF, pawnPos } from "./layout";
@@ -23,8 +22,9 @@ function Scene({
   buildable: Set<number>;
   onTileClick?: (id: number) => void;
 }) {
+  if (!state || !state.players.length) return null;
   const alive = state.players.filter((p) => !p.bankrupt);
-  const cur = state.players[state.currentPlayer];
+  const cur = state.players[state.currentPlayer] ?? state.players[0];
   const [bursts, setBursts] = useState<Burst[]>([]);
   const burstId = useRef(0);
   const prev = useRef<ClientGameState | null>(null);
@@ -153,12 +153,6 @@ function Scene({
       <CameraRig followTile={lastTile} moving={moving} ended={state.phase === "ended"} />
 
       <ContactShadows position={[0, -0.001, 0]} opacity={0.5} scale={16} blur={2.2} far={3} />
-      <Stars radius={60} depth={30} count={1500} factor={3} fade speed={0.6} />
-
-      <EffectComposer>
-        <Bloom intensity={0.55} luminanceThreshold={0.25} mipmapBlur />
-        <Vignette darkness={0.55} offset={0.25} />
-      </EffectComposer>
     </>
   );
 }
@@ -173,7 +167,28 @@ export default function Board3D({
   onTileClick?: (id: number) => void;
 }) {
   return (
-    <Canvas shadows camera={{ position: [0, 9, 8.2], fov: 45 }} dpr={[1, 2]} className="!touch-none">
+    <Canvas
+      shadows
+      camera={{ position: [0, 9, 8.2], fov: 45 }}
+      dpr={1}
+      className="!touch-none"
+      onCreated={({ gl }) => {
+        const canvas = gl.domElement;
+        // WebGL context-loss recovery: tanpa preventDefault, context TIDAK akan
+        // dipulihkan browser dan canvas blank putih permanen.
+        canvas.addEventListener(
+          "webglcontextlost",
+          (e) => {
+            e.preventDefault();
+            console.warn("[Board3D] WebGL context lost — menunggu restore…");
+          },
+          false
+        );
+        canvas.addEventListener("webglcontextrestored", () => {
+          console.warn("[Board3D] WebGL context restored.");
+        });
+      }}
+    >
       <color attach="background" args={["#060b14"]} />
       <fog attach="fog" args={["#060b14", 18, 36]} />
       <Scene state={state} buildable={buildable} onTileClick={onTileClick} />
