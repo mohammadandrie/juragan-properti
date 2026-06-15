@@ -23,19 +23,29 @@ const Board3D = dynamic(() => import("./three/Board3D"), {
   ),
 });
 
+// Durasi animasi pion (klien) untuk MENAHAN reveal interaksi sampai pion sampai.
+// Selaras dengan Pawn3D: START_DELAY 0.75s + ~0.3s per petak + sisa mendarat.
+function moveDurationMs(steps: number): number {
+  const s = Math.min(Math.abs(steps), 12);
+  return 850 + s * 300;
+}
+
 export default function GameClient({ code }: { code: string }) {
   const [state, setState] = useState<ClientGameState | null>(null);
   const [error, setError] = useState("");
   const [notFound, setNotFound] = useState(false);
   const [mute, setMute] = useState(false);
-  const [cameraMode, setCameraMode] = useState<CameraMode>("overview");
+  const [cameraMode, setCameraMode] = useState<CameraMode>("followPawn");
   const [focusTile, setFocusTile] = useState<number | null>(null);
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
   const [resetSignal, setResetSignal] = useState(0);
+  // Gating animasi: tahan reveal beli/sewa/kartu/quiz sampai pion selesai jalan.
+  const [gateUntil, setGateUntil] = useState(0);
+  const [nowTick, setNowTick] = useState(0); // dipaksa berubah saat gate berakhir
   const tokenRef = useRef<string | null>(null);
   const prevState = useRef<ClientGameState | null>(null);
 
-  // efek suara dari perubahan state
+  // efek suara + deteksi gerak pion untuk gating
   useEffect(() => {
     const p = prevState.current;
     prevState.current = state;
@@ -55,7 +65,30 @@ export default function GameClient({ code }: { code: string }) {
     const wasMyTurn = p.players[p.currentPlayer]?.id === state.you;
     const isMyTurnNow = state.players[state.currentPlayer]?.id === state.you;
     if (!wasMyTurn && isMyTurnNow && state.phase === "playing") sfx.turn();
+
+    // pion berpindah → mulai gating (dadu mendarat → angka → pion jalan → sampai)
+    let maxSteps = 0;
+    for (const pl of state.players) {
+      const old = p.players.find((q) => q.id === pl.id);
+      if (old && old.pos !== pl.pos) {
+        const steps = (pl.pos - old.pos + 40) % 40;
+        maxSteps = Math.max(maxSteps, steps);
+      }
+    }
+    if (maxSteps > 0) {
+      const until = Date.now() + moveDurationMs(maxSteps);
+      setGateUntil(until);
+    }
   }, [state]);
+
+  // saat gate aktif, paksa re-render tepat ketika berakhir agar reveal muncul
+  useEffect(() => {
+    if (gateUntil <= Date.now()) return;
+    const t = setTimeout(() => setNowTick((n) => n + 1), gateUntil - Date.now() + 30);
+    return () => clearTimeout(t);
+  }, [gateUntil]);
+
+  const animating = gateUntil > Date.now();
 
   useEffect(() => {
     tokenRef.current = localStorage.getItem(`jp:${code}`);
@@ -132,22 +165,23 @@ export default function GameClient({ code }: { code: string }) {
     state.pendingUpgrade !== null ||
     state.quiz !== null;
   const sellable = new Set<number>();
-  if (myTurn && me && !pending) {
+  if (myTurn && me && !pending && !animating) {
     for (const t of BOARD) {
       if (state.ownership[t.id]?.owner === me.id) sellable.add(t.id);
     }
   }
 
   const winner = state.winner ? state.players.find((p) => p.id === state.winner) : null;
+  const diceSum = state.lastDice ? state.lastDice[0] + state.lastDice[1] : null;
 
   return (
-    <main className="fixed inset-0 grid grid-cols-[minmax(180px,15rem)_1fr_minmax(200px,17rem)] grid-rows-[1fr_auto] gap-2 overflow-hidden bg-[#0F172A] p-2">
-      {/* KIRI: player panel */}
-      <aside className="row-span-1 overflow-hidden rounded-2xl bg-black/20 ring-1 ring-white/5 backdrop-blur">
+    <main className="fixed inset-0 grid grid-cols-[minmax(200px,17rem)_1fr] grid-rows-[1fr_auto] gap-2 overflow-hidden bg-[#0F172A] p-2">
+      {/* KIRI: kartu pemain (transparan, align atas — bukan panel panjang) */}
+      <aside className="row-span-1 overflow-y-auto">
         <PlayerPanel state={state} act={act} />
       </aside>
 
-      {/* TENGAH: board */}
+      {/* TENGAH+KANAN: board besar */}
       <section className="relative row-span-1 overflow-hidden rounded-2xl ring-1 ring-white/5">
         <CanvasBoundary>
           <Board3D
@@ -163,9 +197,37 @@ export default function GameClient({ code }: { code: string }) {
           />
         </CanvasBoundary>
 
-        {/* overlay tengah: hanya banner & info penting */}
-        <EventBanner state={state} />
-        <CardReveal state={state} />
+        {/* overlay tengah: banner & kartu — DITAHAN selama animasi pion jalan */}
+        {!animating && <EventBanner state={state} />}
+        {!animating && <CardReveal state={state} />}
+
+        {/* angka dadu besar saat animasi (dadu mendarat → angka terbaca) */}
+        {animating && diceSum !== null && state.lastDice && (
+          <div className="pointer-events-none absolute left-1/2 top-10 z-30 -translate-x-1/2 text-center">
+            <div className="flex items-center gap-2">
+              {state.lastDice.map((d, i) => (
+                <span
+                  key={i}
+                  className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-3xl font-black text-slate-900 shadow-lg ring-2 ring-amber-300"
+                >
+                  {d}
+                </span>
+              ))}
+            </div>
+            <div className="mt-1 text-2xl font-black text-amber-300 drop-shadow-[0_0_16px_rgba(251,191,36,0.7)]">
+              = {diceSum}
+            </div>
+          </div>
+        )}
+
+        {/* property card: muncul HANYA saat tile diklik (poin 3) */}
+        {selectedTile !== null && (
+          <PropertyInspector
+            state={state}
+            selected={selectedTile}
+            onClose={() => setSelectedTile(null)}
+          />
+        )}
 
         {/* kamera control (kanan atas board) */}
         <div className="absolute right-2 top-2 z-30 flex gap-1">
@@ -173,7 +235,7 @@ export default function GameClient({ code }: { code: string }) {
             <button
               key={m}
               onClick={() => setCameraMode(m)}
-              className={`rounded-lg px-2 py-1 text-[10px] font-bold backdrop-blur ring-1 transition ${
+              className={`rounded-lg px-2.5 py-1.5 text-xs font-bold backdrop-blur ring-1 transition ${
                 cameraMode === m
                   ? "bg-amber-400 text-amber-950 ring-amber-300"
                   : "bg-black/50 text-white ring-white/15 hover:bg-black/70"
@@ -184,7 +246,7 @@ export default function GameClient({ code }: { code: string }) {
           ))}
           <button
             onClick={() => setResetSignal((s) => s + 1)}
-            className="rounded-lg bg-black/50 px-2 py-1 text-[10px] font-bold text-white ring-1 ring-white/15 backdrop-blur hover:bg-black/70 transition"
+            className="rounded-lg bg-black/50 px-2.5 py-1.5 text-xs font-bold text-white ring-1 ring-white/15 backdrop-blur hover:bg-black/70 transition"
             title="Reset kamera (atau klik-ganda papan)"
           >
             ↺
@@ -195,15 +257,15 @@ export default function GameClient({ code }: { code: string }) {
               setMute(m);
               setMuted(m);
             }}
-            className="rounded-lg bg-black/50 px-2 py-1 text-[10px] backdrop-blur ring-1 ring-white/15 hover:bg-black/70 transition"
+            className="rounded-lg bg-black/50 px-2.5 py-1.5 text-sm backdrop-blur ring-1 ring-white/15 hover:bg-black/70 transition"
           >
             {mute ? "🔇" : "🔊"}
           </button>
         </div>
 
         {/* giliranmu! */}
-        {myTurn && state.canRoll && !pending && (
-          <p className="pointer-events-none absolute left-1/2 top-6 z-10 -translate-x-1/2 animate-[dropIn_0.5s_cubic-bezier(0.34,1.56,0.64,1)] text-xl font-black tracking-widest text-amber-300 drop-shadow-[0_0_24px_rgba(251,191,36,0.7)]">
+        {myTurn && state.canRoll && !pending && !animating && (
+          <p className="pointer-events-none absolute left-1/2 top-6 z-10 -translate-x-1/2 animate-[dropIn_0.5s_cubic-bezier(0.34,1.56,0.64,1)] text-2xl font-black tracking-widest text-amber-300 drop-shadow-[0_0_24px_rgba(251,191,36,0.7)]">
             GILIRANMU!
           </p>
         )}
@@ -212,39 +274,35 @@ export default function GameClient({ code }: { code: string }) {
         {winner && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
             <p className="animate-[dropIn_0.8s_cubic-bezier(0.34,1.56,0.64,1)] text-5xl">🏆</p>
-            <p className="mt-3 text-3xl font-black text-amber-300 drop-shadow-[0_0_30px_rgba(251,191,36,0.8)]">
+            <p className="mt-3 text-4xl font-black text-amber-300 drop-shadow-[0_0_30px_rgba(251,191,36,0.8)]">
               {winner.name} MENANG!
             </p>
-            <p className="mt-2 text-sm text-white/70">Juragan properti sejati! 👑</p>
+            <p className="mt-2 text-base text-white/70">Juragan properti sejati! 👑</p>
           </div>
         )}
 
         {/* error toast */}
         {error && (
-          <p className="absolute left-1/2 top-16 z-50 -translate-x-1/2 rounded-full bg-red-500/90 px-4 py-1.5 text-xs font-bold text-white shadow-lg">
+          <p className="absolute left-1/2 top-16 z-50 -translate-x-1/2 rounded-full bg-red-500/90 px-4 py-2 text-sm font-bold text-white shadow-lg">
             {error}
           </p>
         )}
       </section>
 
-      {/* KANAN: action panel */}
-      <aside className="row-span-1 overflow-hidden rounded-2xl bg-black/20 ring-1 ring-white/5 backdrop-blur">
+      {/* BAWAH: aksi (button only, tanpa background panel) — poin 2 */}
+      <footer className="col-span-2 row-start-2">
         <ActionPanel
           state={state}
           myTurn={myTurn}
           me={me}
           act={act}
           onPreviewTile={setFocusTile}
+          animating={animating}
         />
-      </aside>
-
-      {/* BAWAH: property inspector (lebar penuh) */}
-      <footer className="col-span-3 h-20 overflow-hidden rounded-2xl bg-black/20 ring-1 ring-white/5 backdrop-blur">
-        <PropertyInspector state={state} selected={selectedTile} />
       </footer>
 
-      {/* overlay modal: kuis & lobby */}
-      <QuizOverlay state={state} me={me} act={act} />
+      {/* overlay modal: kuis (ditahan selama animasi) & lobby */}
+      {!animating && <QuizOverlay state={state} me={me} act={act} />}
       <LobbyOverlay state={state} me={me} act={act} code={code} />
     </main>
   );

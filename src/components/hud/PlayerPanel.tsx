@@ -24,8 +24,8 @@ export default function PlayerPanel({
   }
 
   return (
-    <div className="flex h-full flex-col gap-2 overflow-y-auto p-2">
-      <h2 className="px-1 text-[11px] font-black uppercase tracking-wider text-white/40">Pemain</h2>
+    <div className="flex flex-col gap-2 p-1">
+      <h2 className="px-1 text-xs font-black uppercase tracking-wider text-white/40">Pemain</h2>
       {state.players.map((p, i) => {
         const isTurn = state.phase === "playing" && i === state.currentPlayer;
         const isLocal = p.id === state.you;
@@ -41,25 +41,25 @@ export default function PlayerPanel({
           >
             <div className="flex items-center gap-2.5">
               <div className="relative shrink-0">
-                <Avatar pawn={p.pawn} color={p.color} size={48} />
+                <Avatar pawn={p.pawn} color={p.color} size={52} />
                 {richestId === p.id && !out && (
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-sm">👑</span>
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-base">👑</span>
                 )}
-                {p.inJail && <span className="absolute -bottom-1 -right-1 text-xs">🚔</span>}
+                {p.inJail && <span className="absolute -bottom-1 -right-1 text-sm">🚔</span>}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1">
-                  <span className="truncate text-sm font-bold text-white" style={{ color: p.color }}>
+                  <span className="truncate text-base font-bold text-white" style={{ color: p.color }}>
                     {p.name}
                   </span>
-                  {isLocal && <span className="text-[10px] text-amber-300">✦</span>}
-                  {p.bot && <span className="text-[10px]">🤖</span>}
+                  {isLocal && <span className="text-xs text-amber-300">✦</span>}
+                  {p.bot && <span className="text-xs">🤖</span>}
                 </div>
-                <div className="text-sm font-black tabular-nums text-amber-300">{fmtMoney(p.money)}</div>
+                <div className="text-lg font-black tabular-nums text-amber-300">{fmtMoney(p.money)}</div>
               </div>
             </div>
 
-            <div className="mt-2 grid grid-cols-2 gap-1 text-[10px]">
+            <div className="mt-2 grid grid-cols-2 gap-1 text-xs">
               <Stat label="Properti" value={`${propCount[p.id] ?? 0} 🏠`} />
               <Stat
                 label="Pinjaman"
@@ -70,7 +70,7 @@ export default function PlayerPanel({
 
             <div className="mt-1.5 flex items-center justify-between">
               <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                className={`rounded-full px-2 py-0.5 text-xs font-bold ${
                   out
                     ? "bg-white/10 text-white/50"
                     : isTurn
@@ -85,7 +85,7 @@ export default function PlayerPanel({
                   onClick={() => {
                     if (confirm("Yakin menyerah dari permainan?")) act({ type: "surrender" });
                   }}
-                  className="rounded-full bg-rose-600/70 px-2.5 py-0.5 text-[10px] font-bold text-white hover:bg-rose-500 active:scale-95 transition"
+                  className="rounded-full bg-rose-600/70 px-2.5 py-0.5 text-xs font-bold text-white hover:bg-rose-500 active:scale-95 transition"
                 >
                   🏳️ Menyerah
                 </button>

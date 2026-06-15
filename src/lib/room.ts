@@ -31,6 +31,7 @@ export function newPlayer(name: string, idx: number, bot: BotPersona | null = nu
     startPassCount: 0,
     hasUsedBankLoan: false,
     emote: null,
+    afk: false,
   };
 }
 
@@ -82,10 +83,11 @@ export function settle(g: GameState): void {
       continue;
     }
 
-    // cari bot yang punya aksi: pemain giliran atau penjawab kuis
+    // cari bot (atau human AFK) yang punya aksi: pemain giliran atau penjawab kuis
     let acted = false;
     for (const p of g.players) {
-      if (!p.bot || p.bankrupt || p.surrendered) continue;
+      if (p.bankrupt || p.surrendered) continue;
+      if (!p.bot && !p.afk) continue; // human aktif: tunggu input manusia
       const action = decideBotAction(g, p);
       if (!action) continue;
       // delay alami: bot baru bertindak jika state sudah >1.2 dtk tidak berubah

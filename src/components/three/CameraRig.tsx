@@ -77,6 +77,9 @@ export default function CameraRig({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, mode]);
 
+  const prevTarget = useRef(new THREE.Vector3());
+  const camDelta = useRef(new THREE.Vector3());
+
   useFrame((_, delta) => {
     const c = controls.current;
     if (!c) return;
@@ -84,11 +87,16 @@ export default function CameraRig({
     // tentukan target yang diinginkan (selalu fallback aman)
     const target = scratch.current;
     let speed = 3.5;
+    // apakah target "mengejar" sesuatu yang bergerak (pion/tujuan)? Jika ya,
+    // posisi kamera ikut digeser agar offset tetap → dunia bergulir, bukan
+    // kamera diam yang cuma re-aim (itu bug "follow tapi kamera diam").
+    let trackMoving = false;
 
     if (focusTile != null) {
       const t = tileTransform(focusTile);
       target.set(t.x, 0.2, t.z);
       speed = 5;
+      trackMoving = true;
     } else if (mode === "cinematic" && moving && destTile != null) {
       // condong ke tujuan + sedikit ke pion (jika valid)
       const t = tileTransform(destTile);
@@ -98,8 +106,10 @@ export default function CameraRig({
       }
       target.copy(dest);
       speed = 2.5;
+      trackMoving = true;
     } else if (mode === "followPawn" && pawnRef.current.ready && isValid(pawnRef.current.pos)) {
       target.copy(pawnRef.current.pos);
+      trackMoving = true;
     } else {
       target.copy(CENTER); // overview / fallback aman
     }
@@ -107,8 +117,16 @@ export default function CameraRig({
     // jaga-jaga: target tak valid -> pusat board
     if (!isValid(target)) target.copy(CENTER);
 
+    prevTarget.current.copy(c.target);
     const k = 1 - Math.exp(-speed * delta);
     c.target.lerp(target, k);
+
+    // geser kamera sebesar perpindahan target → offset pandangan terjaga,
+    // sehingga kamera benar-benar mengikuti pion ke mana pun ia berjalan.
+    if (trackMoving) {
+      camDelta.current.copy(c.target).sub(prevTarget.current);
+      camera.position.add(camDelta.current);
+    }
     c.update();
   });
 

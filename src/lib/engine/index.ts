@@ -312,10 +312,17 @@ export function maybeExpirePhase(g: GameState, now = Date.now()) {
     return;
   }
   // tidak ada pending: kalau masih boleh lempar dadu (canRoll) -> ini deadline
-  // giliran, biarkan auto-advance. Kalau sudah lempar & selesai -> auto-end turn.
+  // giliran. Human yang tak lempar = AFK: tandai agar bot mengambil alih
+  // (settle akan menjalankannya). Bot tidak butuh ini (di-handle settle).
+  // Kalau sudah lempar & selesai (canRoll false) -> auto-end turn.
   g.phaseDeadline = null;
   const cur = currentPlayer(g);
-  if (!cur.bot && !cur.bankrupt && !cur.surrendered) {
+  if (cur.bankrupt || cur.surrendered) return;
+  if (g.canRoll && !cur.bot) {
+    cur.afk = true; // diambil alih bot mulai giliran ini
+    return;
+  }
+  if (!cur.bot) {
     advanceTurn(g);
   }
 }

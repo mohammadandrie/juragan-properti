@@ -24,6 +24,9 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/game/[code]
     return NextResponse.json({ error: "Kamu bukan pemain di room ini." }, { status: 403 });
   }
 
+  // input manusia nyata -> batalkan status AFK (bot berhenti mengambil alih)
+  if (player.afk) player.afk = false;
+
   const err = applyAction(state, player, action);
   if (err) {
     return NextResponse.json({ error: err }, { status: 400 });

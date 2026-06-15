@@ -55,6 +55,7 @@ export interface Player {
   startPassCount: number; // berapa kali lewat MULAI (membuka level upgrade)
   hasUsedBankLoan: boolean; // pinjaman bank hanya 1x/game
   emote: { icon: string; at: number } | null;
+  afk: boolean; // human yang diambil alih bot (deadline lempar terlewati)
 }
 
 export interface Ownership {

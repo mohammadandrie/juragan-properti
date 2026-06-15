@@ -16,8 +16,10 @@ function reserve(persona: BotPersona): number {
 
 // Tentukan satu aksi bot untuk state sekarang; null = tidak ada (tunggu).
 // Dipanggil berulang oleh tick server sampai giliran bot selesai.
+// `bot.bot` null = pemain manusia yang sedang AFK (diambil alih); pakai persona
+// default "untung" agar tetap bermain wajar.
 export function decideBotAction(g: GameState, bot: Player): GameAction | null {
-  const persona = bot.bot!;
+  const persona = bot.bot ?? "untung";
   const isMyTurn = g.players[g.currentPlayer]?.id === bot.id && g.phase === "playing";
 
   // --- kuis: jawab (bot lumayan pintar, kadang salah) ---
