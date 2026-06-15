@@ -142,8 +142,6 @@ export default function CameraRig({
       maxDistance={18}
       minPolarAngle={0.05}
       maxPolarAngle={Math.PI / 2.05}
-      // di mode followPawn: kunci azimuth (kiri-kanan), izinkan pitch/zoom
-      enableRotate={mode !== "followPawn"}
       autoRotate={ended}
       autoRotateSpeed={1.2}
     />
