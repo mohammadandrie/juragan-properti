@@ -92,12 +92,28 @@ export default function Tile3D({
         </mesh>
       )}
 
-      {/* penanda pemilik */}
+      {/* outline kepemilikan: bingkai tipis di tepi tile sesuai warna pemilik */}
       {ownerColor && (
-        <mesh position={[0, 0.105, t.d / 2 - 0.18]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.06, 0.11, 24]} />
-          <meshStandardMaterial color={ownerColor} emissive={ownerColor} emissiveIntensity={0.8} />
-        </mesh>
+        <group position={[0, 0.108, 0]}>
+          {/* dua sisi memanjang */}
+          <mesh position={[0, 0, -t.d / 2 + 0.03]}>
+            <boxGeometry args={[t.w - 0.06, 0.02, 0.035]} />
+            <meshStandardMaterial color={ownerColor} emissive={ownerColor} emissiveIntensity={0.9} />
+          </mesh>
+          <mesh position={[0, 0, t.d / 2 - 0.03]}>
+            <boxGeometry args={[t.w - 0.06, 0.02, 0.035]} />
+            <meshStandardMaterial color={ownerColor} emissive={ownerColor} emissiveIntensity={0.9} />
+          </mesh>
+          {/* dua sisi melebar */}
+          <mesh position={[-t.w / 2 + 0.03, 0, 0]}>
+            <boxGeometry args={[0.035, 0.02, t.d - 0.06]} />
+            <meshStandardMaterial color={ownerColor} emissive={ownerColor} emissiveIntensity={0.9} />
+          </mesh>
+          <mesh position={[t.w / 2 - 0.03, 0, 0]}>
+            <boxGeometry args={[0.035, 0.02, t.d - 0.06]} />
+            <meshStandardMaterial color={ownerColor} emissive={ownerColor} emissiveIntensity={0.9} />
+          </mesh>
+        </group>
       )}
 
       {/* ZONA ATAS: nama/label (corner tetap center karena petak besar) */}

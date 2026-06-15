@@ -94,7 +94,25 @@ export const VIRAL_EVENTS: ViralEvent[] = [
   },
 ];
 
-export const EVENT_EVERY_N_ROUNDS = 2; // event dicek tiap N putaran
+// Interval acak antar-event (putaran penuh). Setelah event muncul, jadwal
+// berikutnya = roundCount + acak[MIN..MAX].
+export const EVENT_INTERVAL_MIN = 3;
+export const EVENT_INTERVAL_MAX = 5;
+// Durasi acak event berdurasi (rentMultiplier/rentFree), dalam putaran.
+export const EVENT_DURATION_MIN = 2;
+export const EVENT_DURATION_MAX = 3;
+
+// Jadwal putaran event berikutnya secara acak dari sekarang.
+export function scheduleNextEvent(fromRound: number): number {
+  const span = EVENT_INTERVAL_MAX - EVENT_INTERVAL_MIN + 1;
+  return fromRound + EVENT_INTERVAL_MIN + Math.floor(Math.random() * span);
+}
+
+// Durasi acak untuk event berdurasi.
+export function randomEventDuration(): number {
+  const span = EVENT_DURATION_MAX - EVENT_DURATION_MIN + 1;
+  return EVENT_DURATION_MIN + Math.floor(Math.random() * span);
+}
 
 export function eventById(id: string): ViralEvent | undefined {
   return VIRAL_EVENTS.find((e) => e.id === id);

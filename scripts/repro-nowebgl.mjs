@@ -1,0 +1,12 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch({ args: ["--disable-webgl","--disable-webgl2","--no-sandbox"] });
+const page = await browser.newPage();
+const errs=[]; page.on("pageerror",e=>errs.push(e.message));
+await page.goto("http://127.0.0.1:3000/game/CC43R",{waitUntil:"networkidle"}).catch(e=>errs.push("goto "+e.message));
+await page.waitForTimeout(4000);
+const text=(await page.evaluate(()=>document.body.innerText)).slice(0,200);
+const bg=await page.evaluate(()=>getComputedStyle(document.body).backgroundColor);
+console.log("BODY:",text||"(BLANK PUTIH)");
+console.log("BG:",bg);
+console.log("ERRORS:",errs.length); errs.forEach(e=>console.log("  -",e));
+await browser.close();

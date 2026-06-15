@@ -45,46 +45,81 @@ function Roof({ size, y }: { size: number; y: number }) {
   );
 }
 
+// Jendela kecil emissive (lampu) sebagai aksen di sisi depan bangunan.
+function Windows({ y, w, rows, color = "#fde68a" }: { y: number; w: number; rows: number; color?: string }) {
+  const items = [];
+  const cols = 2;
+  const gap = w / (cols + 1);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      items.push(
+        <mesh key={`${r}-${c}`} position={[-w / 2 + gap * (c + 1), y + 0.07 + r * 0.1, w / 2 + 0.001]}>
+          <planeGeometry args={[0.04, 0.05]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.9} />
+        </mesh>
+      );
+    }
+  }
+  return <>{items}</>;
+}
+
 function Building({ level, color }: { level: number; color: string }) {
   switch (level) {
-    case 1: // rumah 1 lantai
+    case 1: // rumah kecil 1 lantai + atap pelana
       return (
         <group>
-          <Box w={0.26} h={0.18} d={0.26} y={0} color={color} />
-          <Roof size={0.2} y={0.18} />
+          <Box w={0.28} h={0.16} d={0.26} y={0} color={color} />
+          <Roof size={0.21} y={0.16} />
+          {/* pintu */}
+          <mesh position={[0, 0.05, 0.131]}>
+            <planeGeometry args={[0.06, 0.09]} />
+            <meshStandardMaterial color="#3f2d1d" />
+          </mesh>
         </group>
       );
     case 2: // rumah 2 lantai
       return (
         <group>
-          <Box w={0.26} h={0.32} d={0.26} y={0} color={color} />
-          <Roof size={0.2} y={0.32} />
+          <Box w={0.3} h={0.34} d={0.28} y={0} color={color} />
+          <Roof size={0.23} y={0.34} />
+          <Windows y={0.02} w={0.3} rows={2} />
         </group>
       );
-    case 3: // apartemen kecil
+    case 3: // apartemen kecil (atap datar, 3 lantai)
       return (
         <group>
-          <Box w={0.3} h={0.42} d={0.3} y={0} color={color} />
-          <Box w={0.34} h={0.04} d={0.34} y={0.42} color="#334155" emissive={0.05} />
+          <Box w={0.32} h={0.46} d={0.3} y={0} color={color} />
+          <Box w={0.36} h={0.04} d={0.34} y={0.46} color="#334155" emissive={0.05} />
+          <Windows y={0.04} w={0.32} rows={3} />
         </group>
       );
-    case 4: // apartemen tinggi
+    case 4: // apartemen tinggi ramping
       return (
         <group>
-          <Box w={0.3} h={0.62} d={0.3} y={0} color={color} />
-          <Box w={0.34} h={0.05} d={0.34} y={0.62} color="#334155" emissive={0.05} />
+          <Box w={0.3} h={0.66} d={0.3} y={0} color={color} />
+          <Box w={0.34} h={0.05} d={0.34} y={0.66} color="#334155" emissive={0.05} />
+          {/* setback atas */}
+          <Box w={0.18} h={0.12} d={0.18} y={0.71} color={color} emissive={0.15} />
+          <Windows y={0.05} w={0.3} rows={5} color="#bae6fd" />
         </group>
       );
-    case 5: // tower / gedung
+    case 5: // gedung / tower bertingkat + mahkota
       return (
         <group>
-          <Box w={0.32} h={0.5} d={0.32} y={0} color={color} />
-          <Box w={0.22} h={0.4} d={0.22} y={0.5} color={color} emissive={0.2} />
+          <Box w={0.34} h={0.5} d={0.34} y={0} color={color} />
+          <Box w={0.26} h={0.4} d={0.26} y={0.5} color={color} emissive={0.18} />
+          <Box w={0.16} h={0.28} d={0.16} y={0.9} color={color} emissive={0.25} />
           {/* puncak menara */}
-          <mesh castShadow position={[0, 1.0, 0]}>
-            <coneGeometry args={[0.12, 0.22, 4]} />
-            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.4} roughness={0.4} />
+          <mesh castShadow position={[0, 1.28, 0]}>
+            <coneGeometry args={[0.1, 0.22, 4]} />
+            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.5} roughness={0.4} />
           </mesh>
+          {/* antena */}
+          <mesh position={[0, 1.46, 0]}>
+            <cylinderGeometry args={[0.006, 0.006, 0.12, 6]} />
+            <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
+          </mesh>
+          <Windows y={0.06} w={0.34} rows={4} color="#fde68a" />
         </group>
       );
     default:

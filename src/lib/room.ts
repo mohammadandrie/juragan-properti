@@ -1,6 +1,6 @@
 import { GameState, Player, BotPersona } from "./types";
 import { BOT_PROFILES, decideBotAction } from "./bots";
-import { applyAction, maybeExpireQuiz, maybeExpirePhase, currentPlayer, advanceTurn } from "./engine";
+import { applyAction, maybeExpireQuiz, maybeExpirePhase, armAutoEnd, currentPlayer, advanceTurn } from "./engine";
 import { START_MONEY } from "./money";
 
 export const PLAYER_COLORS = ["#22d3ee", "#f43f5e", "#a3e635", "#fbbf24"];
@@ -54,6 +54,7 @@ export function newGame(hostName: string): GameState {
     lastCard: null,
     doublesCount: 0,
     roundCount: 0,
+    nextEventRound: 4, // event pertama paling cepat putaran ke-3..5
     ownership: {},
     chanceDeck: [],
     chestDeck: [],
@@ -96,7 +97,12 @@ export function settle(g: GameState): void {
         break;
       }
     }
-    if (!acted) return;
+    if (!acted) {
+      // tak ada bot bertindak: arm auto-end untuk human yang gilirannya tuntas,
+      // lalu berhenti (timer akan di-settle pada tick/polling berikutnya).
+      armAutoEnd(g);
+      return;
+    }
   }
 }
 

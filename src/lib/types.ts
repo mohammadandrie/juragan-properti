@@ -162,6 +162,7 @@ export interface GameState {
   lastCard: { text: string; icon: string; at: number } | null;
   doublesCount: number;
   roundCount: number; // berapa kali giliran kembali ke pemain pertama
+  nextEventRound: number; // putaran berikutnya event boleh muncul (acak 3-5)
   ownership: Record<number, Ownership>;
   chanceDeck: number[];
   chestDeck: number[];

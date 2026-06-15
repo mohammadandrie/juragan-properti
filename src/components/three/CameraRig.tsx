@@ -7,9 +7,9 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import { tileTransform } from "./layout";
 
-export type CameraMode = "overview" | "followPawn";
+export type CameraMode = "overview" | "followPawn" | "cinematic";
 
-// Shared ref yang ditulis pion aktif tiap frame (posisi dunia + kesiapan).
+// Shared ref yang ditulis pion lokal tiap frame (posisi dunia + kesiapan).
 export interface PawnFocusRef {
   pos: THREE.Vector3;
   ready: boolean;
@@ -18,31 +18,37 @@ export interface PawnFocusRef {
 const OVERVIEW_POS = new THREE.Vector3(0, 9, 8.2);
 const CENTER = new THREE.Vector3(0, 0, 0);
 
-// Kamera 2 POV berbasis OrbitControls:
+// Kamera 3 mode berbasis OrbitControls:
 // - wheel = zoom (minDistance/maxDistance), drag = rotate (pitch di-clamp).
 // - Overview: target = pusat board.
-// - FollowPawn: target = posisi pion aktif (lerp), fallback ke overview bila NaN/belum ready.
+// - followPawn: target = posisi pion LOKAL (lerp), fallback overview bila NaN/belum ready.
+// - cinematic: saat pion bergerak, target condong ke tile tujuan lalu kembali
+//   ke mode dasar; selalu validasi target (anti blank screen).
 // - focusTile: override sementara (preview aset) -> target ke tile tsb.
-// - resetSignal: tiap berubah, snap kamera ke angle default mode aktif.
+// - resetSignal / double-click: snap kamera ke angle default mode aktif.
 export default function CameraRig({
   mode,
   pawnRef,
   focusTile,
   resetSignal,
   ended,
+  moving,
+  destTile,
 }: {
   mode: CameraMode;
   pawnRef: React.MutableRefObject<PawnFocusRef>;
   focusTile: number | null;
   resetSignal: number;
   ended: boolean;
+  moving: boolean;
+  destTile: number | null;
 }) {
   const controls = useRef<OrbitControlsImpl>(null);
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const scratch = useRef(new THREE.Vector3());
 
-  // Reset / mode change: snap ke angle default mode aktif.
-  useEffect(() => {
+  // snap kamera ke angle default sesuai mode aktif
+  function snapToMode() {
     const c = controls.current;
     if (!c) return;
     if (mode === "followPawn" && pawnRef.current.ready && isValid(pawnRef.current.pos)) {
@@ -54,25 +60,54 @@ export default function CameraRig({
       c.target.copy(CENTER);
     }
     c.update();
+  }
+
+  // Reset / mode change: snap ke angle default.
+  useEffect(() => {
+    snapToMode();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetSignal, mode]);
+
+  // double-click pada canvas = reset kamera
+  useEffect(() => {
+    const el = gl.domElement;
+    const onDbl = () => snapToMode();
+    el.addEventListener("dblclick", onDbl);
+    return () => el.removeEventListener("dblclick", onDbl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gl, mode]);
 
   useFrame((_, delta) => {
     const c = controls.current;
     if (!c) return;
 
-    // tentukan target yang diinginkan
+    // tentukan target yang diinginkan (selalu fallback aman)
     const target = scratch.current;
+    let speed = 3.5;
+
     if (focusTile != null) {
       const t = tileTransform(focusTile);
       target.set(t.x, 0.2, t.z);
+      speed = 5;
+    } else if (mode === "cinematic" && moving && destTile != null) {
+      // condong ke tujuan + sedikit ke pion (jika valid)
+      const t = tileTransform(destTile);
+      const dest = scratch.current.set(t.x, 0.2, t.z);
+      if (pawnRef.current.ready && isValid(pawnRef.current.pos)) {
+        dest.lerp(pawnRef.current.pos, 0.45);
+      }
+      target.copy(dest);
+      speed = 2.5;
     } else if (mode === "followPawn" && pawnRef.current.ready && isValid(pawnRef.current.pos)) {
       target.copy(pawnRef.current.pos);
     } else {
       target.copy(CENTER); // overview / fallback aman
     }
 
-    const k = 1 - Math.exp(-(focusTile != null ? 5 : 3.5) * delta);
+    // jaga-jaga: target tak valid -> pusat board
+    if (!isValid(target)) target.copy(CENTER);
+
+    const k = 1 - Math.exp(-speed * delta);
     c.target.lerp(target, k);
     c.update();
   });

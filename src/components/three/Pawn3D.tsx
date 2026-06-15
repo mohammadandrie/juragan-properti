@@ -10,6 +10,7 @@ import PawnModel from "./PawnModel";
 import type { PawnFocusRef } from "./CameraRig";
 
 const STEP_DURATION = 0.28; // detik per petak
+const START_DELAY = 0.75; // jeda sebelum jalan: beri waktu dadu mendarat & angka terbaca
 
 export default function Pawn3D({
   color,
@@ -20,6 +21,7 @@ export default function Pawn3D({
   active,
   emote,
   focusRef,
+  reportFocus,
 }: {
   color: string;
   pawn: PawnKind;
@@ -29,6 +31,7 @@ export default function Pawn3D({
   active?: boolean;
   emote?: { icon: string; at: number } | null;
   focusRef?: React.MutableRefObject<PawnFocusRef>;
+  reportFocus?: boolean; // tulis posisi ke focusRef (pion lokal), lepas dari `active`
 }) {
   const ref = useRef<THREE.Group>(null);
   const inner = useRef<THREE.Group>(null);
@@ -36,6 +39,7 @@ export default function Pawn3D({
   const queue = useRef<number[]>([]);
   const visual = useRef<number>(tileId); // petak yang sedang ditampilkan
   const stepT = useRef(0);
+  const delay = useRef(0); // sisa jeda awal sebelum melangkah
   const [walking, setWalking] = useState(false);
 
   // tileId berubah -> hitung jalur jalan
@@ -45,6 +49,7 @@ export default function Pawn3D({
     // jika mundur (kartu moveBack) jalurnya kepanjangan; teleport halus saja
     if (queue.current.length > 12) queue.current = [tileId];
     stepT.current = 0;
+    delay.current = START_DELAY; // tunggu dadu mendarat dulu
     setWalking(true);
   }, [tileId]);
 
@@ -52,6 +57,12 @@ export default function Pawn3D({
     const g = ref.current;
     if (!g) return;
     const t = clock.elapsedTime;
+
+    // jeda awal: pion diam dulu (dadu mendarat, tile tujuan glow, angka terbaca)
+    if (delay.current > 0 && queue.current.length > 0) {
+      delay.current -= delta;
+      return;
+    }
 
     if (queue.current.length > 0) {
       stepT.current += delta / STEP_DURATION;
@@ -85,8 +96,8 @@ export default function Pawn3D({
     g.scale.y = g.scale.x;
     g.scale.z = g.scale.x;
 
-    // pion aktif lapor posisi dunia ke shared ref (untuk kamera follow)
-    if (active && focusRef) {
+    // pion lokal lapor posisi dunia ke shared ref (untuk kamera follow)
+    if (reportFocus && focusRef) {
       focusRef.current.pos.set(g.position.x, g.position.y, g.position.z);
       focusRef.current.ready = true;
     }

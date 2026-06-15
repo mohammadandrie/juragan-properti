@@ -13,6 +13,7 @@ import Pawn3D from "./Pawn3D";
 import Dice3D from "./Dice3D";
 import CameraRig, { CameraMode, PawnFocusRef } from "./CameraRig";
 import Particles, { Burst } from "./Particles";
+import World3D from "./World3D";
 
 function Scene({
   state,
@@ -97,16 +98,30 @@ function Scene({
 
   return (
     <>
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[6, 10, 4]} intensity={1.4} castShadow shadow-mapSize={[2048, 2048]} />
-      <pointLight position={[0, 4, 0]} intensity={12} color="#4fd1c5" distance={12} />
+      <ambientLight intensity={0.55} />
+      <hemisphereLight args={["#2a3f5f", "#0b1320", 0.4]} />
+      <directionalLight
+        position={[7, 12, 5]}
+        intensity={1.5}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-12}
+        shadow-camera-right={12}
+        shadow-camera-top={12}
+        shadow-camera-bottom={-12}
+        shadow-bias={-0.0004}
+      />
+      <pointLight position={[0, 4, 0]} intensity={10} color="#4fd1c5" distance={14} />
 
-      {/* dasar papan */}
-      <mesh receiveShadow position={[0, -0.08, 0]}>
+      {/* dunia: platform + miniatur kota */}
+      <World3D />
+
+      {/* dasar papan (di atas platform) */}
+      <mesh receiveShadow position={[0, -0.02, 0]}>
         <boxGeometry args={[HALF * 2 + 0.5, 0.16, HALF * 2 + 0.5]} />
         <meshStandardMaterial color="#0b1320" roughness={0.4} metalness={0.5} />
       </mesh>
-      <mesh receiveShadow position={[0, 0.02, 0]}>
+      <mesh receiveShadow position={[0, 0.06, 0]}>
         <boxGeometry args={[HALF * 2 - 3.2, 0.04, HALF * 2 - 3.2]} />
         <meshStandardMaterial color="#101c2c" roughness={0.6} metalness={0.3} />
       </mesh>
@@ -151,6 +166,7 @@ function Scene({
 
       {alive.map((p) => {
         const here = alive.filter((q) => q.pos === p.pos);
+        const isLocal = p.id === state.you;
         return (
           <Pawn3D
             key={p.id}
@@ -161,7 +177,8 @@ function Scene({
             count={here.length}
             active={state.phase === "playing" && p.id === cur?.id}
             emote={p.emote}
-            focusRef={p.id === cur?.id ? pawnFocus : undefined}
+            focusRef={isLocal ? pawnFocus : undefined}
+            reportFocus={isLocal}
           />
         );
       })}
@@ -175,6 +192,8 @@ function Scene({
         focusTile={focusTile}
         resetSignal={resetSignal}
         ended={state.phase === "ended"}
+        moving={moving}
+        destTile={state.destTile}
       />
 
       <ContactShadows position={[0, -0.001, 0]} opacity={0.5} scale={16} blur={2.2} far={3} />
@@ -220,8 +239,8 @@ export default function Board3D({
         });
       }}
     >
-      <color attach="background" args={["#060b14"]} />
-      <fog attach="fog" args={["#060b14", 18, 36]} />
+      <color attach="background" args={["#0F172A"]} />
+      <fog attach="fog" args={["#0F172A", 20, 40]} />
       <Scene
         state={state}
         sellable={sellable}

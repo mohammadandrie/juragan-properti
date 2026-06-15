@@ -13,7 +13,7 @@ import {
 } from "./helpers";
 import { rollDice } from "./core";
 import { answerQuiz, maybeExpireQuiz, maybeTriggerEvent, tickEvents } from "./quizEvent";
-import { JAIL_FINE, MAX_ROUNDS, buyCost, sellValue, fmtMoney } from "../money";
+import { JAIL_FINE, MAX_ROUNDS, END_AUTO_MS, buyCost, sellValue, fmtMoney } from "../money";
 
 export * from "./helpers";
 export * from "./core";
@@ -311,8 +311,28 @@ export function maybeExpirePhase(g: GameState, now = Date.now()) {
     g.phaseDeadline = null;
     return;
   }
-  // canRoll hangus: biarkan bot/timer giliran berikutnya yang menangani
+  // tidak ada pending: kalau masih boleh lempar dadu (canRoll) -> ini deadline
+  // giliran, biarkan auto-advance. Kalau sudah lempar & selesai -> auto-end turn.
   g.phaseDeadline = null;
+  const cur = currentPlayer(g);
+  if (!cur.bot && !cur.bankrupt && !cur.surrendered) {
+    advanceTurn(g);
+  }
+}
+
+// Arm timer auto-end giliran untuk pemain manusia setelah aksinya tuntas
+// (tidak ada pending & tidak bisa lempar lagi). Tanpa ini giliran human macet
+// karena tombol "Akhiri Giliran" sudah dihapus.
+export function armAutoEnd(g: GameState) {
+  if (g.phase !== "playing") return;
+  const cur = currentPlayer(g);
+  if (cur.bot || cur.bankrupt || cur.surrendered) return;
+  if (g.canRoll) return; // masih giliran lempar
+  if (hasPending(g)) return; // ada keputusan tertunda
+  if (g.quiz) return;
+  if (g.phaseDeadline === null) {
+    g.phaseDeadline = Date.now() + END_AUTO_MS;
+  }
 }
 
 export function advanceTurn(g: GameState) {

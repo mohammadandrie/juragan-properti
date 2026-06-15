@@ -2,7 +2,7 @@ import { GameState, Player } from "../types";
 import { BOARD } from "../board";
 import { QUIZ_REWARD, QUIZ_PENALTY, fmtMoney } from "../money";
 import { QUIZ_QUESTIONS } from "../quiz";
-import { VIRAL_EVENTS, eventById, EVENT_EVERY_N_ROUNDS } from "../events";
+import { VIRAL_EVENTS, eventById, scheduleNextEvent, randomEventDuration } from "../events";
 import { pushLog, alivePlayers, transfer, forcePay } from "./helpers";
 
 // ---- Kuis ----
@@ -37,11 +37,17 @@ export function maybeExpireQuiz(g: GameState, now = Date.now()) {
 }
 
 // ---- Event viral ----
-// Dipanggil setiap kali putaran kembali ke pemain pertama
+// Dipanggil setiap kali putaran kembali ke pemain pertama.
+// Jadwal acak 3-5 putaran; maksimal 1 event aktif sekaligus.
 export function maybeTriggerEvent(g: GameState) {
-  if (g.roundCount === 0 || g.roundCount % EVENT_EVERY_N_ROUNDS !== 0) return;
-  // jangan dobel di putaran sama
-  if (g.lastEvent && g.lastEvent.at === g.roundCount) return;
+  if (g.roundCount === 0) return;
+  // belum waktunya event berikutnya
+  if (g.roundCount < g.nextEventRound) return;
+  // sudah ada event berdurasi yang masih aktif -> tunda, jangan dobel
+  if (g.activeEvents.length > 0) {
+    g.nextEventRound = scheduleNextEvent(g.roundCount);
+    return;
+  }
 
   const ev = VIRAL_EVENTS[Math.floor(Math.random() * VIRAL_EVENTS.length)];
   let targetTile: number | undefined;
@@ -63,7 +69,11 @@ export function maybeTriggerEvent(g: GameState) {
     case "bonusOwner": {
       // pilih properti yang ada pemiliknya secara acak
       const ownedIds = Object.keys(g.ownership).map(Number);
-      if (ownedIds.length === 0) return; // tidak ada target, batal
+      if (ownedIds.length === 0) {
+        // tidak ada target -> batal, coba lagi putaran berikutnya
+        g.nextEventRound = scheduleNextEvent(g.roundCount);
+        return;
+      }
       targetTile = ownedIds[Math.floor(Math.random() * ownedIds.length)];
       const own = g.ownership[targetTile];
       const owner = g.players.find((p) => p.id === own.owner)!;
@@ -79,11 +89,13 @@ export function maybeTriggerEvent(g: GameState) {
     }
     case "rentMultiplier":
     case "rentFree":
-      g.activeEvents.push({ eventId: ev.id, remainingRounds: ev.rounds });
+      // durasi acak 2-3 putaran (abaikan ev.rounds statis)
+      g.activeEvents.push({ eventId: ev.id, remainingRounds: randomEventDuration() });
       break;
   }
 
   g.lastEvent = { eventId: ev.id, tile: targetTile, at: g.roundCount };
+  g.nextEventRound = scheduleNextEvent(g.roundCount);
   pushLog(g, `📣 EVENT: ${ev.title} — ${ev.desc}`);
 }
 

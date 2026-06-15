@@ -1,0 +1,10 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch({ args:["--use-gl=angle","--use-angle=swiftshader","--ignore-gpu-blocklist","--no-sandbox"] });
+const page = await browser.newPage({ viewport:{width:1000,height:750} });
+const errs=[]; page.on("pageerror",e=>errs.push(e.message));
+await page.goto("http://127.0.0.1:3100/game/CC43R",{waitUntil:"domcontentloaded",timeout:20000}).catch(e=>errs.push("goto "+e.message));
+await page.waitForTimeout(7000);
+await page.screenshot({ path:"/tmp/pion.png", animations:"disabled", timeout:60000 });
+console.log("canvas:", await page.evaluate(()=>document.querySelectorAll("canvas").length));
+console.log("ERRORS:",errs.length); errs.forEach(e=>console.log("  -",e));
+await browser.close();
