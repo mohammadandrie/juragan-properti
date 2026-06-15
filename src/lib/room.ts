@@ -1,6 +1,6 @@
 import { GameState, Player, BotPersona } from "./types";
 import { BOT_PROFILES, decideBotAction } from "./bots";
-import { applyAction, maybeExpireQuiz, maybeExpirePhase, armAutoEnd, currentPlayer, advanceTurn } from "./engine";
+import { applyAction, maybeExpireGame, maybeExpireQuiz, maybeExpirePhase, armAutoEnd, currentPlayer, advanceTurn } from "./engine";
 import { START_MONEY } from "./money";
 
 export const PLAYER_COLORS = ["#22d3ee", "#f43f5e", "#a3e635", "#fbbf24"];
@@ -56,6 +56,8 @@ export function newGame(hostName: string): GameState {
     doublesCount: 0,
     roundCount: 0,
     nextEventRound: 4, // event pertama paling cepat putaran ke-3..5
+    timeLimitMin: 20, // default 20 menit
+    endsAt: null,
     ownership: {},
     chanceDeck: [],
     chestDeck: [],
@@ -72,6 +74,7 @@ export function newGame(hostName: string): GameState {
 export function settle(g: GameState): void {
   if (g.phase !== "playing") return;
   for (let guard = 0; guard < 50; guard++) {
+    maybeExpireGame(g);
     maybeExpireQuiz(g);
     maybeExpirePhase(g);
     if (g.phase !== "playing") return;

@@ -58,9 +58,18 @@ export default function Pawn3D({
     if (!g) return;
     const t = clock.elapsedTime;
 
-    // jeda awal: pion diam dulu (dadu mendarat, tile tujuan glow, angka terbaca)
+    // jeda awal: pion diam DI PETAK ASAL (bukan tujuan) — dadu mendarat, tile
+    // tujuan glow, angka terbaca. Park posisi di visual.current agar tidak
+    // "teleport ke tujuan lalu balik jalan".
     if (delay.current > 0 && queue.current.length > 0) {
       delay.current -= delta;
+      const here = pawnPos(visual.current, index, count);
+      g.position.set(here[0], here[1], here[2]);
+      // tetap lapor posisi ke kamera agar follow stabil saat menunggu
+      if (reportFocus && focusRef) {
+        focusRef.current.pos.set(here[0], here[1], here[2]);
+        focusRef.current.ready = true;
+      }
       return;
     }
 

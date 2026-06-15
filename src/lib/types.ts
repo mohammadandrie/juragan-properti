@@ -164,6 +164,8 @@ export interface GameState {
   doublesCount: number;
   roundCount: number; // berapa kali giliran kembali ke pemain pertama
   nextEventRound: number; // putaran berikutnya event boleh muncul (acak 3-5)
+  timeLimitMin: number; // batas durasi main (menit); 0 = sampai bangkrut/menyerah
+  endsAt: number | null; // epoch ms kapan game berakhir karena waktu; null = tak ada
   ownership: Record<number, Ownership>;
   chanceDeck: number[];
   chestDeck: number[];
@@ -176,6 +178,7 @@ export interface GameState {
 
 export type GameAction =
   | { type: "start" }
+  | { type: "setTimeLimit"; minutes: number } // host pilih batas durasi di lobby
   | { type: "addBot"; persona: BotPersona }
   | { type: "setPawn"; pawn: PawnKind; color?: string }
   | { type: "roll" }
@@ -192,6 +195,7 @@ export type GameAction =
   | { type: "useJailCard" }
   | { type: "surrender" }
   | { type: "emote"; icon: string }
+  | { type: "resume" } // human AFK kembali aktif (batalkan ambil-alih bot)
   | { type: "endTurn" };
 
 // State untuk klien: token di-strip, plus id pemain peminta

@@ -77,8 +77,8 @@ export default function CameraRig({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, mode]);
 
-  const prevTarget = useRef(new THREE.Vector3());
-  const camDelta = useRef(new THREE.Vector3());
+  const desiredCam = useRef(new THREE.Vector3());
+  const dir = useRef(new THREE.Vector3());
 
   useFrame((_, delta) => {
     const c = controls.current;
@@ -87,45 +87,40 @@ export default function CameraRig({
     // tentukan target yang diinginkan (selalu fallback aman)
     const target = scratch.current;
     let speed = 3.5;
-    // apakah target "mengejar" sesuatu yang bergerak (pion/tujuan)? Jika ya,
-    // posisi kamera ikut digeser agar offset tetap → dunia bergulir, bukan
-    // kamera diam yang cuma re-aim (itu bug "follow tapi kamera diam").
-    let trackMoving = false;
+    // posisi kamera yang diinginkan; null = jangan paksa (mode overview manual)
+    let wantCam: THREE.Vector3 | null = null;
 
     if (focusTile != null) {
       const t = tileTransform(focusTile);
       target.set(t.x, 0.2, t.z);
       speed = 5;
-      trackMoving = true;
+      wantCam = camFromCenter(desiredCam.current, dir.current, target, 4.2, 4.5);
     } else if (mode === "cinematic" && moving && destTile != null) {
       // condong ke tujuan + sedikit ke pion (jika valid)
       const t = tileTransform(destTile);
-      const dest = scratch.current.set(t.x, 0.2, t.z);
+      const dest = target.set(t.x, 0.2, t.z);
       if (pawnRef.current.ready && isValid(pawnRef.current.pos)) {
         dest.lerp(pawnRef.current.pos, 0.45);
       }
-      target.copy(dest);
       speed = 2.5;
-      trackMoving = true;
+      wantCam = camFromCenter(desiredCam.current, dir.current, dest, 5, 5.5);
     } else if (mode === "followPawn" && pawnRef.current.ready && isValid(pawnRef.current.pos)) {
       target.copy(pawnRef.current.pos);
-      trackMoving = true;
+      // Kamera SELALU berada di sisi luar (dari pusat papan menuju pion, lalu
+      // didorong keluar) & lebih tinggi → pandangan selalu menyorot ke dalam
+      // papan; tak pernah membelakangi/menyamping.
+      wantCam = camFromCenter(desiredCam.current, dir.current, pawnRef.current.pos, 4.5, 4.5);
     } else {
-      target.copy(CENTER); // overview / fallback aman
+      target.copy(CENTER); // overview / fallback aman (orbit manual bebas)
     }
 
     // jaga-jaga: target tak valid -> pusat board
     if (!isValid(target)) target.copy(CENTER);
 
-    prevTarget.current.copy(c.target);
     const k = 1 - Math.exp(-speed * delta);
     c.target.lerp(target, k);
-
-    // geser kamera sebesar perpindahan target → offset pandangan terjaga,
-    // sehingga kamera benar-benar mengikuti pion ke mana pun ia berjalan.
-    if (trackMoving) {
-      camDelta.current.copy(c.target).sub(prevTarget.current);
-      camera.position.add(camDelta.current);
+    if (wantCam && isValid(wantCam)) {
+      camera.position.lerp(wantCam, k);
     }
     c.update();
   });
@@ -149,4 +144,22 @@ export default function CameraRig({
 
 function isValid(v: THREE.Vector3): boolean {
   return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+}
+
+// Posisi kamera ideal: dari PUSAT papan menuju target (arah radial keluar),
+// didorong sejauh `dist` lalu diangkat `height`. Hasilnya kamera selalu di sisi
+// luar papan menghadap ke dalam → pusat papan selalu ter-frame, pion tak pernah
+// terlihat dari belakang/samping aneh.
+function camFromCenter(
+  out: THREE.Vector3,
+  dir: THREE.Vector3,
+  target: THREE.Vector3,
+  dist: number,
+  height: number
+): THREE.Vector3 {
+  dir.set(target.x - CENTER.x, 0, target.z - CENTER.z);
+  if (dir.lengthSq() < 0.0004) dir.set(0, 0, 1); // pion di pusat: default ke arah +Z
+  dir.normalize();
+  out.set(target.x + dir.x * dist, target.y + height, target.z + dir.z * dist);
+  return out;
 }

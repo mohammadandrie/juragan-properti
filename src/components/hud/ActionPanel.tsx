@@ -11,6 +11,7 @@ type Me = {
   inJail: boolean;
   jailCards: number;
   hasUsedBankLoan: boolean;
+  afk: boolean;
 } | null;
 
 // Panel BAWAH: deretan tombol aksi mengambang (tanpa background panel) — roll,
@@ -54,6 +55,16 @@ export default function ActionPanel({
   // saat animasi berjalan, sembunyikan deret tombol (cukup tampil status)
   return (
     <div className="flex min-h-[4.5rem] flex-wrap items-center justify-center gap-2 px-2 py-1">
+      {/* AFK: bot mengambil alih — tombol untuk merebut kembali kendali */}
+      {me?.afk && state.phase === "playing" && (
+        <button
+          onClick={() => act({ type: "resume" })}
+          className="flex h-12 items-center gap-2 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 px-6 text-base font-black text-amber-950 shadow-lg ring-2 ring-white/30 hover:scale-[1.03] active:scale-95 transition"
+        >
+          🎮 Ambil Alih dari Bot
+        </button>
+      )}
+
       {/* status giliran ringkas */}
       {state.phase === "playing" && !mineBuy && !mineRent && !mineUp && (
         <span className="text-base font-bold">

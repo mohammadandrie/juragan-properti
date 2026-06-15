@@ -134,6 +134,46 @@ export default function LobbyOverlay({
           </>
         )}
 
+        {/* batas waktu (host) */}
+        {isHost && (
+          <>
+            <p className="mt-5 text-center text-xs font-bold uppercase tracking-widest text-white/60">Batas waktu main</p>
+            <div className="mt-2 flex justify-center gap-2">
+              {[
+                { m: 20, label: "20 mnt" },
+                { m: 30, label: "30 mnt" },
+                { m: 45, label: "45 mnt" },
+                { m: 0, label: "Tanpa batas" },
+              ].map((o) => (
+                <button
+                  key={o.m}
+                  onClick={() => act({ type: "setTimeLimit", minutes: o.m })}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition active:scale-95 ${
+                    state.timeLimitMin === o.m
+                      ? "bg-amber-400 text-amber-950 ring-2 ring-amber-300"
+                      : "bg-white/10 text-white hover:bg-white/20"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-center text-[11px] text-white/40">
+              {state.timeLimitMin > 0
+                ? "Saat waktu habis, pemain dengan kekayaan tertinggi menang."
+                : "Main sampai hanya tersisa satu pemain (lainnya bangkrut/menyerah)."}
+            </p>
+          </>
+        )}
+        {!isHost && (
+          <p className="mt-5 text-center text-xs text-white/50">
+            Batas waktu:{" "}
+            <b className="text-amber-300">
+              {state.timeLimitMin > 0 ? `${state.timeLimitMin} menit` : "Tanpa batas"}
+            </b>
+          </p>
+        )}
+
         {/* mulai */}
         <div className="mt-6 flex justify-center">
           {isHost ? (

@@ -78,7 +78,15 @@ export default function PlayerPanel({
                       : "bg-white/10 text-white/60"
                 }`}
               >
-                {out ? (p.bankrupt ? "Bangkrut" : "Menyerah") : isTurn ? "Giliran" : "Menunggu"}
+                {out
+                  ? p.bankrupt
+                    ? "Bangkrut"
+                    : "Menyerah"
+                  : p.afk
+                    ? "🤖 Bot ambil alih"
+                    : isTurn
+                      ? "Giliran"
+                      : "Menunggu"}
               </span>
               {isLocal && !out && state.phase === "playing" && (
                 <button

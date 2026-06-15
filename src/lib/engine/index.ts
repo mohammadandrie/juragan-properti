@@ -24,6 +24,7 @@ const PAWNS: PawnKind[] = ["default", "bajaj", "pinisi", "komodo", "garuda", "oj
 // Jalankan aksi pemain. Return pesan error, atau null jika sukses.
 export function applyAction(g: GameState, p: Player, action: GameAction): string | null {
   // timer-based settle dicek di setiap aksi
+  maybeExpireGame(g);
   maybeExpireQuiz(g);
   maybeExpirePhase(g);
 
@@ -47,6 +48,15 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       return null; // pembuatan bot dilakukan caller (butuh id generator)
     }
 
+    case "setTimeLimit": {
+      if (g.phase !== "lobby") return "Batas waktu hanya bisa diatur di lobby.";
+      if (g.players[0]?.id !== p.id) return "Hanya host yang bisa mengatur batas waktu.";
+      const ok = [0, 20, 30, 45];
+      if (!ok.includes(action.minutes)) return "Pilihan batas waktu tidak valid.";
+      g.timeLimitMin = action.minutes;
+      return null;
+    }
+
     case "start": {
       if (g.phase !== "lobby") return "Permainan sudah dimulai.";
       if (g.players[0]?.id !== p.id) return "Hanya host yang bisa memulai.";
@@ -54,7 +64,13 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       g.phase = "playing";
       g.canRoll = true;
       g.phaseDeadline = null;
-      pushLog(g, "🚀 Permainan dimulai. Selamat jadi juragan!");
+      g.endsAt = g.timeLimitMin > 0 ? Date.now() + g.timeLimitMin * 60_000 : null;
+      pushLog(
+        g,
+        g.timeLimitMin > 0
+          ? `🚀 Permainan dimulai! Batas waktu ${g.timeLimitMin} menit — terkaya menang saat waktu habis.`
+          : "🚀 Permainan dimulai. Main sampai tersisa satu juragan!"
+      );
       return null;
     }
 
@@ -240,6 +256,16 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       return null;
     }
 
+    case "resume": {
+      // batalkan status AFK (route sudah menghapus p.afk sebelum ini); beri
+      // tenggat baru agar pemain punya waktu penuh sebelum diambil alih lagi.
+      if (g.phase !== "playing") return "Permainan belum berjalan.";
+      if (currentPlayer(g).id === p.id && g.canRoll) {
+        g.phaseDeadline = Date.now() + 30_000;
+      }
+      return null;
+    }
+
     case "endTurn": {
       const err = mustBeTurn(g, p);
       if (err) return err;
@@ -278,6 +304,12 @@ function mustBeTurn(g: GameState, p: Player): string | null {
   if (p.bankrupt) return "Kamu sudah bangkrut.";
   if (p.surrendered) return "Kamu sudah menyerah.";
   return null;
+}
+
+// Batas durasi game tercapai: akhiri dengan pemenang = kekayaan tertinggi.
+export function maybeExpireGame(g: GameState, now = Date.now()) {
+  if (g.phase !== "playing" || g.endsAt === null || now < g.endsAt) return;
+  endByNetWorth(g, "⏰ Waktu habis!");
 }
 
 // Fase keputusan (beli/sewa/upgrade) hangus jika lewat deadline.
@@ -368,8 +400,8 @@ export function advanceTurn(g: GameState) {
   g.phaseDeadline = Date.now() + 30_000;
 }
 
-// Batas putaran tercapai: pemenang = kekayaan bersih tertinggi.
-function endByNetWorth(g: GameState) {
+// Akhiri game: pemenang = kekayaan bersih tertinggi. `reason` jadi prefix log.
+function endByNetWorth(g: GameState, reason = `🏁 Batas ${MAX_ROUNDS} putaran!`) {
   const alive = alivePlayers(g);
   if (alive.length === 0) return;
   const winner = alive.reduce((a, b) => (netWorth(g, b) > netWorth(g, a) ? b : a));
@@ -377,7 +409,7 @@ function endByNetWorth(g: GameState) {
   g.phase = "ended";
   pushLog(
     g,
-    `🏁 Batas ${MAX_ROUNDS} putaran! ${winner.name} menang dengan kekayaan ${fmtMoney(netWorth(g, winner))}.`
+    `${reason} ${winner.name} menang dengan kekayaan ${fmtMoney(netWorth(g, winner))}.`
   );
 }
 
