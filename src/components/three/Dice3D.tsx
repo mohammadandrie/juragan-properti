@@ -209,7 +209,9 @@ export default function Dice3D({
     setVisualFaces((prev) => {
       const updated: [number | null, number | null] = [...prev];
       updated[index] = face;
+      console.log(`[FACES] Die ${index} = ${face}, both = [${updated[0]}, ${updated[1]}]`);
       if (updated[0] !== null && updated[1] !== null) {
+        console.log(`[FACES] Both ready, firing onVisualFaces([${updated[0]}, ${updated[1]}])`);
         onVisualFaces?.(updated as [number, number]);
       }
       return updated;

@@ -94,6 +94,13 @@ export default function GameClient({ code }: { code: string }) {
     const wasMyTurn = p.players[p.currentPlayer]?.id === state.you;
     const isMyTurnNow = state.players[state.currentPlayer]?.id === state.you;
     if (!wasMyTurn && isMyTurnNow && state.phase === "playing") sfx.turn();
+    
+    // Reset animation gates saat currentPlayer berubah (fix: buttons gk terblokir saat takeover)
+    if (p.currentPlayer !== state.currentPlayer) {
+      setHoldUntil(0);
+      setMoveUntil(0);
+      setDiceReady(false);
+    }
 
     // pion berpindah → catat siapa & berapa langkah, tahan eksekusi pion-jalan
     let maxSteps = 0;
@@ -243,6 +250,10 @@ export default function GameClient({ code }: { code: string }) {
   const winner = state.winner ? state.players.find((p) => p.id === state.winner) : null;
   // Use visual faces if available (from geometry), else fall back to cached backend value
   const diceSum = visualFaces ? visualFaces[0] + visualFaces[1] : (displayDiceRef.current ? displayDiceRef.current[0] + displayDiceRef.current[1] : null);
+  
+  useEffect(() => {
+    console.log(`[GAMECLIENT] visualFaces updated: ${visualFaces ? `[${visualFaces[0]}, ${visualFaces[1]}]` : "null"}`);
+  }, [visualFaces]);
 
   const remainMs = state.endsAt !== null ? Math.max(0, state.endsAt - clock) : null;
   const remainStr =
