@@ -15,39 +15,42 @@ import CameraRig, { CameraMode, PawnFocusRef } from "./CameraRig";
 import Particles, { Burst } from "./Particles";
 import World3D from "./World3D";
 
-// Marker prediksi langkah: angka N ditempel DATAR di permukaan petak tujuan
-// dari posisi pemain giliran (kalau dadu = N, berhenti di sini). Bukan
-// melayang — menempel di papan, di lahan kosong tengah petak, sehingga semua
-// pemain bisa membacanya sebelum dadu dilempar.
+// Marker prediksi langkah: angka N ditempel DATAR di papan, di lahan kosong
+// TEPAT DI ATAS petak tujuan (sisi dalam, ke arah tengah papan) — bukan di
+// atas kotak propertinya. Dihitung dari posisi pemain giliran (kalau dadu = N,
+// berhenti di sini) sehingga semua pemain bisa membacanya sebelum dadu dilempar.
 function PredictMarkers({ from }: { from: number }) {
+  // jarak geser keluar dari tepi dalam petak ke lahan kosong papan
+  const OUT = 0.32; // (petak: -d/2 = -0.8) → marker di z lokal ≈ -1.12
   return (
     <>
       {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
         const tileId = (from + n) % 40;
         const t = tileTransform(tileId);
+        const z = -t.d / 2 - OUT; // sisi dalam petak, masuk ke area kosong papan
         return (
           <group key={n} position={[t.x, 0, t.z]} rotation={[0, t.rotY, 0]}>
-            {/* alas bundar gelap, datar di atas permukaan petak */}
-            <mesh position={[0, 0.112, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-              <circleGeometry args={[0.21, 28]} />
+            {/* alas bundar gelap, datar menempel di papan */}
+            <mesh position={[0, 0.1, z]} rotation={[-Math.PI / 2, 0, 0]}>
+              <circleGeometry args={[0.2, 28]} />
               <meshStandardMaterial
                 color="#0b1320"
                 emissive="#fbbf24"
                 emissiveIntensity={0.18}
                 transparent
-                opacity={0.9}
+                opacity={0.92}
               />
             </mesh>
             {/* cincin emas tepi */}
-            <mesh position={[0, 0.113, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[0.21, 0.25, 28]} />
+            <mesh position={[0, 0.101, z]} rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[0.2, 0.24, 28]} />
               <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
             </mesh>
             {/* angka langkah, tergeletak datar di papan */}
             <Text
-              position={[0, 0.115, 0]}
+              position={[0, 0.103, z]}
               rotation={[-Math.PI / 2, 0, 0]}
-              fontSize={0.26}
+              fontSize={0.25}
               color="#fbbf24"
               anchorX="center"
               anchorY="middle"
