@@ -132,13 +132,16 @@ export default function GameClient({ code }: { code: string }) {
 
   // dadu selesai → tampil angka, tahan READ_MS, lalu pion mulai jalan
   function handleDiceSettled() {
-    setDiceReady(true);
     const steps = pendingMoveStepsRef.current;
-    if (steps > 0) {
-      const hold = Date.now() + READ_MS;
-      setHoldUntil(hold);
-      setMoveUntil(hold + moveStepsMs(steps));
-    }
+    // Delay popup 300ms biar animation fully complete
+    setTimeout(() => {
+      setDiceReady(true);
+      if (steps > 0) {
+        const hold = Date.now() + READ_MS;
+        setHoldUntil(hold);
+        setMoveUntil(hold + moveStepsMs(steps));
+      }
+    }, 300);
   }
 
   // tick re-render saat gate beralih fase
