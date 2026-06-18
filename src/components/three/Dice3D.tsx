@@ -140,15 +140,23 @@ function Die({
       g.position.x += (x - g.position.x) * k;
       g.position.z += (0 - g.position.z) * k;
       
-      // Deteksi & laporkan face on every frame (callback hanya jika berubah)
-      const faceUp = detectFaceUp(g.rotation);
-      if (lastReportedFace.current !== faceUp) {
-        lastReportedFace.current = faceUp;
-        onFaceUp?.(faceUp);
+      // Cek convergence: semua 3 axis harus dekat target
+      const dx = Math.abs(shortAngle(g.rotation.x, tx));
+      const dy = Math.abs(shortAngle(g.rotation.y, ty));
+      const dz = Math.abs(shortAngle(g.rotation.z, tz));
+      const isFullySettled = dx < 0.05 && dy < 0.05 && dz < 0.05;
+      
+      // Deteksi & laporkan face HANYA saat truly settled
+      if (isFullySettled) {
+        const faceUp = detectFaceUp(g.rotation);
+        if (lastReportedFace.current !== faceUp) {
+          lastReportedFace.current = faceUp;
+          onFaceUp?.(faceUp);
+        }
       }
       
-      // Mark settled hanya untuk onSettled (visual dadu fixed)
-      if (!settledNotified.current && Math.abs(shortAngle(g.rotation.x, tx)) < 0.05) {
+      // Mark settled hanya untuk onSettled
+      if (!settledNotified.current && isFullySettled) {
         settledNotified.current = true;
         onSettled?.();
       }
