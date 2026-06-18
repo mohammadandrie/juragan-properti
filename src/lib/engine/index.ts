@@ -2,6 +2,7 @@ import { GameState, GameAction, Player, PawnKind } from "../types";
 import { BOARD } from "../board";
 import {
   pushLog,
+  pushNotice,
   currentPlayer,
   alivePlayers,
   transfer,
@@ -101,6 +102,7 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
         g,
         `🏠 ${p.name} membeli ${tile.name}${level > 1 ? ` level ${level}` : ""} seharga ${fmtMoney(cost)}!`
       );
+      pushNotice(g, "🏠", `${p.name} membeli ${tile.name}${level > 1 ? ` lvl ${level}` : ""} (${fmtMoney(cost)})`, "info");
       return null;
     }
 
@@ -133,6 +135,14 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
         own.level === 5
           ? `🏨 ${p.name} membangun gedung mewah di ${BOARD[pu.tile].name}!`
           : `🏗️ ${p.name} upgrade ${BOARD[pu.tile].name} ke level ${own.level} (${fmtMoney(pu.cost)}).`
+      );
+      pushNotice(
+        g,
+        own.level === 5 ? "🏨" : "🏗️",
+        own.level === 5
+          ? `${p.name} bangun gedung mewah di ${BOARD[pu.tile].name}!`
+          : `${p.name} upgrade ${BOARD[pu.tile].name} → lvl ${own.level} (${fmtMoney(pu.cost)})`,
+        "good"
       );
       return null;
     }
@@ -183,6 +193,7 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
         delete g.ownership[tileId];
         transfer(g, null, p, refund);
         pushLog(g, `📉 ${p.name} menjual ${BOARD[tileId].name} (${fmtMoney(refund)}).`);
+        pushNotice(g, "📉", `${p.name} menjual ${BOARD[tileId].name} (${fmtMoney(refund)})`, "bad");
       }
       if (p.money < pr.amount) return "Masih kurang — jual aset lain atau pinjam bank.";
       settleRent(g, p, pr.amount, pr.ownerId, pr.tile);
@@ -199,6 +210,7 @@ export function applyAction(g: GameState, p: Player, action: GameAction): string
       delete g.ownership[action.tile];
       transfer(g, null, p, refund);
       pushLog(g, `📉 ${p.name} menjual ${BOARD[action.tile].name} ke bank (${fmtMoney(refund)}).`);
+      pushNotice(g, "📉", `${p.name} menjual ${BOARD[action.tile].name} (${fmtMoney(refund)})`, "bad");
       return null;
     }
 

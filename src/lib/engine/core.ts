@@ -202,8 +202,10 @@ export function landOn(g: GameState, p: Player) {
       break;
     }
     case "jail":
-      // mendarat di petak Penjara (id 10) = "hanya berkunjung", tidak ditahan
-      pushLog(g, `🛂 ${p.name} sedang berkunjung di Penjara.`);
+      // Berhenti tepat di petak Penjara = ditahan (bukan sekadar berkunjung).
+      sendToJail(g, p);
+      pushLog(g, `🚔 ${p.name} berhenti di Penjara dan ditahan.`);
+      g.canRoll = false;
       break;
     case "parking":
       pushLog(g, `🅿️ ${p.name} berhenti di Parkir Bebas.`);

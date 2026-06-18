@@ -21,7 +21,8 @@ export function EventBanner({ state }: { state: ClientGameState }) {
   const tileName = state.lastEvent.tile != null ? BOARD[state.lastEvent.tile].name : null;
 
   return (
-    <div className="pointer-events-none absolute left-1/2 bottom-32 z-20 w-full max-w-md -translate-x-1/2 px-4">
+    // Posisi: tepat di bawah popup hasil dadu (atas-tengah).
+    <div className="pointer-events-none absolute left-1/2 top-32 z-20 w-full max-w-md -translate-x-1/2 px-4">
       <div
         className={`animate-[dropIn_0.6s_cubic-bezier(0.34,1.56,0.64,1)] rounded-2xl p-[2px] ${
           ev.good
@@ -61,6 +62,39 @@ export function CardReveal({ state }: { state: ClientGameState }) {
       <div className="animate-[cardFlip_0.6s_ease-out] w-60 rounded-2xl border-2 border-amber-400/60 bg-gradient-to-b from-amber-50 to-amber-100 p-5 text-center shadow-[0_0_50px_-5px_rgba(251,191,36,0.6)]">
         <p className="text-4xl">{state.lastCard.icon}</p>
         <p className="mt-2 text-sm font-bold text-amber-950">{state.lastCard.text}</p>
+      </div>
+    </div>
+  );
+}
+
+// Toast aksi pemain (beli / upgrade / jual / kuis benar-salah).
+// Muncul di bawah-tengah, di atas panel aksi, auto-hilang ~3.5 detik.
+const TONE_STYLE: Record<"good" | "bad" | "info", string> = {
+  good: "from-emerald-400 to-teal-400 text-emerald-950",
+  bad: "from-rose-500 to-red-500 text-white",
+  info: "from-amber-400 to-orange-400 text-amber-950",
+};
+
+export function PlayerNotice({ state }: { state: ClientGameState }) {
+  const [shownAt, setShownAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!state.lastNotice) return;
+    setShownAt(state.lastNotice.at);
+    const t = setTimeout(() => setShownAt(null), 3500);
+    return () => clearTimeout(t);
+  }, [state.lastNotice?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!state.lastNotice || shownAt !== state.lastNotice.at) return null;
+  const n = state.lastNotice;
+
+  return (
+    <div className="pointer-events-none absolute left-1/2 bottom-36 z-20 w-full max-w-sm -translate-x-1/2 px-4">
+      <div
+        className={`animate-[dropIn_0.4s_cubic-bezier(0.34,1.56,0.64,1)] flex items-center gap-2 rounded-2xl bg-gradient-to-r px-4 py-2.5 font-bold shadow-lg ${TONE_STYLE[n.tone]}`}
+      >
+        <span className="text-xl">{n.icon}</span>
+        <span className="text-sm">{n.text}</span>
       </div>
     </div>
   );

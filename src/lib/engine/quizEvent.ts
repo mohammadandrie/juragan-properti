@@ -3,7 +3,7 @@ import { BOARD } from "../board";
 import { QUIZ_REWARD, QUIZ_PENALTY, fmtMoney } from "../money";
 import { QUIZ_QUESTIONS } from "../quiz";
 import { VIRAL_EVENTS, eventById, scheduleNextEvent, randomEventDuration } from "../events";
-import { pushLog, alivePlayers, transfer, forcePay } from "./helpers";
+import { pushLog, pushNotice, alivePlayers, transfer, forcePay } from "./helpers";
 
 // ---- Kuis ----
 export function answerQuiz(g: GameState, p: Player, choice: number): string | null {
@@ -17,9 +17,12 @@ export function answerQuiz(g: GameState, p: Player, choice: number): string | nu
   if (choice === question.answer) {
     transfer(g, null, p, QUIZ_REWARD);
     pushLog(g, `🎉 ${p.name} jawab benar! Hadiah ${fmtMoney(QUIZ_REWARD)}.`);
+    pushNotice(g, "🎉", `${p.name} jawab benar Cerdas Cermat! +${fmtMoney(QUIZ_REWARD)}`, "good");
   } else {
     forcePay(g, p, QUIZ_PENALTY, null);
-    pushLog(g, `❌ ${p.name} salah. Jawaban: ${question.choices[question.answer]}. Denda ${fmtMoney(QUIZ_PENALTY)}.`);
+    // Sengaja TIDAK menyebut jawaban benar — pemain lain tak boleh tahu.
+    pushLog(g, `❌ ${p.name} salah menjawab Cerdas Cermat. Denda ${fmtMoney(QUIZ_PENALTY)}.`);
+    pushNotice(g, "❌", `${p.name} salah menjawab Cerdas Cermat. −${fmtMoney(QUIZ_PENALTY)}`, "bad");
   }
   return null;
 }
@@ -29,11 +32,12 @@ export function maybeExpireQuiz(g: GameState, now = Date.now()) {
   const q = g.quiz;
   if (!q || now < q.deadline) return;
   const p = g.players.find((x) => x.id === q.playerId)!;
-  const question = QUIZ_QUESTIONS[q.questionIdx];
   g.quiz = null;
   g.phaseDeadline = null;
   forcePay(g, p, QUIZ_PENALTY, null);
-  pushLog(g, `⏰ Waktu habis! Jawaban: ${question.choices[question.answer]}. ${p.name} denda ${fmtMoney(QUIZ_PENALTY)}.`);
+  // Tanpa membocorkan jawaban benar.
+  pushLog(g, `⏰ Waktu habis! ${p.name} tidak menjawab. Denda ${fmtMoney(QUIZ_PENALTY)}.`);
+  pushNotice(g, "⏰", `${p.name} kehabisan waktu Cerdas Cermat. −${fmtMoney(QUIZ_PENALTY)}`, "bad");
 }
 
 // ---- Event viral ----

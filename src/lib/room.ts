@@ -55,6 +55,7 @@ export function newGame(hostName: string): GameState {
     lastEvent: null,
     lastDice: null,
     lastCard: null,
+    lastNotice: null,
     doublesCount: 0,
     roundCount: 0,
     nextEventRound: 4, // event pertama paling cepat putaran ke-3..5

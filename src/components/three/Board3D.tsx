@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Text, ContactShadows } from "@react-three/drei";
+import { Text, ContactShadows, Billboard } from "@react-three/drei";
 import * as THREE from "three";
 import { BOARD } from "@/lib/board";
 import { ClientGameState } from "@/lib/types";
-import { HALF, pawnPos } from "./layout";
+import { HALF, pawnPos, tileTransform } from "./layout";
 import Tile3D from "./Tile3D";
 import House3D from "./House3D";
 import Pawn3D from "./Pawn3D";
@@ -14,6 +14,42 @@ import Dice3D from "./Dice3D";
 import CameraRig, { CameraMode, PawnFocusRef } from "./CameraRig";
 import Particles, { Burst } from "./Particles";
 import World3D from "./World3D";
+
+// Marker prediksi langkah: angka melayang di atas petak tujuan dari posisi
+// pemain giliran (kalau dadu = N, berhenti di sini). Membantu pemain &
+// penonton membaca papan sebelum dadu dilempar.
+function PredictMarkers({ from }: { from: number }) {
+  return (
+    <>
+      {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
+        const tileId = (from + n) % 40;
+        const t = tileTransform(tileId);
+        return (
+          <Billboard key={n} position={[t.x, 0.92, t.z]}>
+            <mesh>
+              <circleGeometry args={[0.21, 24]} />
+              <meshBasicMaterial color="#0b1320" transparent opacity={0.82} />
+            </mesh>
+            <mesh position={[0, 0, -0.001]}>
+              <ringGeometry args={[0.21, 0.25, 24]} />
+              <meshBasicMaterial color="#fbbf24" transparent opacity={0.9} />
+            </mesh>
+            <Text
+              fontSize={0.25}
+              color="#fbbf24"
+              anchorX="center"
+              anchorY="middle"
+              fontWeight={900}
+              position={[0, 0, 0.01]}
+            >
+              {n}
+            </Text>
+          </Billboard>
+        );
+      })}
+    </>
+  );
+}
 
 function Scene({
   state,
@@ -25,6 +61,7 @@ function Scene({
   onDiceSettled,
   movingPawnIsLocal,
   destActive,
+  predictFrom,
 }: {
   state: ClientGameState;
   highlightTiles: number[];
@@ -35,6 +72,7 @@ function Scene({
   onDiceSettled?: () => void;
   movingPawnIsLocal?: boolean;
   destActive?: boolean;
+  predictFrom?: number | null;
 }) {
   const highlightSet = new Set(highlightTiles);
   if (!state || !state.players.length) return null;
@@ -190,6 +228,8 @@ function Scene({
         );
       })}
 
+      {predictFrom != null && <PredictMarkers from={predictFrom} />}
+
       <Dice3D dice={state.lastDice} rollId={rollId} onAllSettled={onDiceSettled} />
       <Particles bursts={bursts} onDone={(id) => setBursts((arr) => arr.filter((b) => b.id !== id))} />
 
@@ -218,6 +258,7 @@ export default function Board3D({
   onDiceSettled,
   movingPawnIsLocal,
   destActive,
+  predictFrom,
 }: {
   state: ClientGameState;
   highlightTiles: number[];
@@ -228,6 +269,7 @@ export default function Board3D({
   onDiceSettled?: () => void;
   movingPawnIsLocal?: boolean;
   destActive?: boolean;
+  predictFrom?: number | null;
 }) {
   return (
     <Canvas
@@ -264,6 +306,7 @@ export default function Board3D({
         onDiceSettled={onDiceSettled}
         movingPawnIsLocal={movingPawnIsLocal}
         destActive={destActive}
+        predictFrom={predictFrom}
       />
     </Canvas>
   );

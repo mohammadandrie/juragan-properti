@@ -16,6 +16,11 @@ export function pushLog(g: GameState, msg: string) {
   if (g.log.length > 60) g.log.splice(0, g.log.length - 60);
 }
 
+// Notifikasi singkat aksi pemain → ditampilkan sebagai toast di klien.
+export function pushNotice(g: GameState, icon: string, text: string, tone: "good" | "bad" | "info") {
+  g.lastNotice = { icon, text, tone, at: Date.now() };
+}
+
 // Multiplier sewa dari event viral aktif; 0 = sewa gratis
 export function rentMultiplier(g: GameState, tileId: number): number {
   let mult = 1;

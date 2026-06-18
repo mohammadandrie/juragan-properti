@@ -34,8 +34,10 @@ export default function QuizOverlay({
   const isMine = me?.id === q.playerId;
   const secsLeft = Math.max(0, Math.ceil((q.deadline - now) / 1000));
   const urgent = secsLeft <= 5;
-  // setelah pemain memilih, perlihatkan jawaban benar (hijau) & salah (merah)
+  // setelah pemain memilih, perlihatkan hasil. TAPI jika salah, jawaban yang
+  // benar TIDAK dibocorkan — hanya pilihan pemain yang ditandai merah.
   const revealed = picked !== null;
+  const pickedCorrect = revealed && picked === question.answer;
 
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -72,7 +74,8 @@ export default function QuizOverlay({
                 const isPicked = picked === i;
                 let style = "bg-white/10 text-white hover:bg-white/20";
                 if (revealed) {
-                  if (isAnswer) style = "bg-emerald-500 text-emerald-950 ring-2 ring-emerald-300";
+                  // hijau hanya jika pemain MEMANG memilih jawaban benar
+                  if (isPicked && pickedCorrect) style = "bg-emerald-500 text-emerald-950 ring-2 ring-emerald-300";
                   else if (isPicked) style = "bg-rose-600 text-white ring-2 ring-rose-300";
                   else style = "bg-white/5 text-white/50";
                 } else if (isPicked) {
@@ -90,8 +93,8 @@ export default function QuizOverlay({
                   >
                     <span className="mr-2 font-black text-violet-300">{["A", "B", "C", "D"][i]}.</span>
                     {c}
-                    {revealed && isAnswer && <span className="ml-2">✓</span>}
-                    {revealed && isPicked && !isAnswer && <span className="ml-2">✗</span>}
+                    {revealed && isPicked && pickedCorrect && <span className="ml-2">✓</span>}
+                    {revealed && isPicked && !pickedCorrect && <span className="ml-2">✗</span>}
                   </button>
                 );
               })}
@@ -99,12 +102,12 @@ export default function QuizOverlay({
             {revealed && (
               <p
                 className={`mt-3 text-center text-base font-black ${
-                  picked === question.answer ? "text-emerald-300" : "text-rose-300"
+                  pickedCorrect ? "text-emerald-300" : "text-rose-300"
                 }`}
               >
-                {picked === question.answer
+                {pickedCorrect
                   ? `🎉 Benar! +${fmtMoney(QUIZ_REWARD)}`
-                  : `❌ Salah. Jawaban: ${question.choices[question.answer]} · −${fmtMoney(QUIZ_PENALTY)}`}
+                  : `❌ Salah · −${fmtMoney(QUIZ_PENALTY)}`}
               </p>
             )}
           </div>

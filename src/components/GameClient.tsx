@@ -10,7 +10,7 @@ import PropertyInspector from "./hud/PropertyInspector";
 import PropertyListPanel from "./hud/PropertyListPanel";
 import QuizOverlay from "./hud/QuizOverlay";
 import LobbyOverlay from "./hud/LobbyOverlay";
-import { EventBanner, CardReveal } from "./hud/Banners";
+import { EventBanner, CardReveal, PlayerNotice } from "./hud/Banners";
 import CanvasBoundary from "./three/CanvasBoundary";
 import type { CameraMode } from "./three/CameraRig";
 import { sfx, setMuted } from "@/lib/sfx";
@@ -300,6 +300,11 @@ export default function GameClient({ code }: { code: string }) {
             onDiceSettled={handleDiceSettled}
             movingPawnIsLocal={movingPawnIsLocal && inMove}
             destActive={showingDiceNumber && (inHold || inMove)}
+            predictFrom={
+              state.phase === "playing" && state.canRoll && !animating && cur && !cur.inJail
+                ? cur.pos
+                : null
+            }
           />
         </CanvasBoundary>
       </section>
@@ -352,6 +357,7 @@ export default function GameClient({ code }: { code: string }) {
       {/* overlay di atas board */}
       <div className="pointer-events-none absolute inset-0 z-20">
         <EventBanner state={state} />
+        <PlayerNotice state={state} />
         {!animating && <CardReveal state={state} />}
 
         {/* card properti kanan saat tile diklik */}

@@ -164,6 +164,8 @@ export interface GameState {
   lastEvent: { eventId: string; tile?: number; at: number } | null;
   lastDice: [number, number] | null;
   lastCard: { text: string; icon: string; at: number } | null;
+  // notifikasi aksi pemain (beli/upgrade/jual/kuis) untuk toast di klien
+  lastNotice: { icon: string; text: string; tone: "good" | "bad" | "info"; at: number } | null;
   doublesCount: number;
   roundCount: number; // berapa kali giliran kembali ke pemain pertama
   nextEventRound: number; // putaran berikutnya event boleh muncul (acak 3-5)
