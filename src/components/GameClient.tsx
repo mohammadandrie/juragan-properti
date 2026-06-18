@@ -49,6 +49,7 @@ export default function GameClient({ code }: { code: string }) {
   const [showPropList, setShowPropList] = useState(false);
   const prevCamRef = useRef<CameraMode>("followPawn");
   // Flow gating: dadu mengacak → settle → tampil angka → tahan → pion jalan
+  const [rolling, setRolling] = useState(false); // dadu sedang berputar (spin)
   const [diceReady, setDiceReady] = useState(false); // dadu sudah berhenti
   const [holdUntil, setHoldUntil] = useState(0); // angka ditampilkan sampai kapan
   const [moveUntil, setMoveUntil] = useState(0); // pion sedang berjalan sampai kapan
@@ -58,10 +59,9 @@ export default function GameClient({ code }: { code: string }) {
   const [, setNowTick] = useState(0);
   const tokenRef = useRef<string | null>(null);
   const prevState = useRef<ClientGameState | null>(null);
-  // Cache dadu saat animasi dimulai → gunakan di popup (hindari race condition)
+  // Cache dadu saat animasi dimulai → gunakan di popup (hindari race condition).
+  // Dadu 3D snap deterministik ke nilai ini, jadi popup & dadu pasti sama angka.
   const displayDiceRef = useRef<[number, number] | null>(null);
-  // Visual faces dari geometri dadu (bukan backend value)
-  const [visualFaces, setVisualFaces] = useState<[number, number] | null>(null);
 
   // efek suara + deteksi gerak pion untuk gating
   useEffect(() => {
@@ -76,7 +76,7 @@ export default function GameClient({ code }: { code: string }) {
     if (JSON.stringify(p.lastDice) !== JSON.stringify(state.lastDice) && state.lastDice) {
       sfx.dice();
       displayDiceRef.current = state.lastDice; // cache dadu saat roll baru
-      setVisualFaces(null); // reset visual faces, tunggu update dari geometri
+      setRolling(true); // dadu mulai berputar
       setDiceReady(false); // mulai animasi baru
       setHoldUntil(0);
     }
@@ -97,7 +97,7 @@ export default function GameClient({ code }: { code: string }) {
     
     // Reset animation gates saat currentPlayer berubah (fix: buttons gk terblokir saat takeover)
     if (p.currentPlayer !== state.currentPlayer) {
-      console.log(`[GATE] Reset: player ${p.currentPlayer} → ${state.currentPlayer}`);
+      setRolling(false);
       setHoldUntil(0);
       setMoveUntil(0);
       setDiceReady(false);
@@ -133,8 +133,9 @@ export default function GameClient({ code }: { code: string }) {
   // dadu selesai → tampil angka, tahan READ_MS, lalu pion mulai jalan
   function handleDiceSettled() {
     const steps = pendingMoveStepsRef.current;
-    // Delay popup 300ms biar animation fully complete
+    // Delay popup 300ms biar animasi dadu benar-benar diam dulu
     setTimeout(() => {
+      setRolling(false); // dadu berhenti berputar → angka boleh tampil
       setDiceReady(true);
       if (steps > 0) {
         const hold = Date.now() + READ_MS;
@@ -157,9 +158,11 @@ export default function GameClient({ code }: { code: string }) {
   const showingDiceNumber = diceReady; // angka tampil setelah dadu berhenti
   const inHold = diceReady && holdUntil > 0 && now < holdUntil; // jeda baca
   const inMove = moveUntil > now && holdUntil > 0 && now >= holdUntil;
-  // selama hold/move/dadu masih spin: tahan reveal interaksi
-  const animating =
-    (state?.lastDice && !diceReady) || inHold || inMove;
+  // selama hold/move/dadu masih spin: tahan reveal interaksi.
+  // Pakai flag `rolling` eksplisit — JANGAN pakai (lastDice && !diceReady),
+  // karena lastDice tetap terisi antar-giliran sehingga gate bisa nyangkut
+  // `true` saat giliran kembali ke kita (tombol Lempar Dadu jadi hilang).
+  const animating = rolling || inHold || inMove;
 
   // jam mundur batas waktu + countdown giliran
   const [clock, setClock] = useState(Date.now());
@@ -253,8 +256,10 @@ export default function GameClient({ code }: { code: string }) {
   }
 
   const winner = state.winner ? state.players.find((p) => p.id === state.winner) : null;
-  // Use visual faces if available (from geometry), else fall back to cached backend value
-  const diceSum = visualFaces ? visualFaces[0] + visualFaces[1] : (displayDiceRef.current ? displayDiceRef.current[0] + displayDiceRef.current[1] : null);
+  // Dadu 3D snap ke nilai backend ini → popup & dadu fisik selalu sama angka.
+  const diceSum = displayDiceRef.current
+    ? displayDiceRef.current[0] + displayDiceRef.current[1]
+    : null;
 
   const remainMs = state.endsAt !== null ? Math.max(0, state.endsAt - clock) : null;
   const remainStr =
@@ -295,7 +300,6 @@ export default function GameClient({ code }: { code: string }) {
             onDiceSettled={handleDiceSettled}
             movingPawnIsLocal={movingPawnIsLocal && inMove}
             destActive={showingDiceNumber && (inHold || inMove)}
-            onVisualFaces={setVisualFaces}
           />
         </CanvasBoundary>
       </section>

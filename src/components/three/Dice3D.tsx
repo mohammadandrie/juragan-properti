@@ -4,58 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-// Rotasi agar muka `n` menghadap atas
+// Rotasi agar muka `n` menghadap atas.
+// Penting: nilai harus benar-benar menempatkan muka `n` di +Y. Muka 2 ada di
+// sisi +X, muka 5 di sisi −X. Untuk membawa +X → +Y butuh rotasi Z = +90°,
+// dan −X → +Y butuh rotasi Z = −90° (sebelumnya tertukar → dadu menampilkan
+// angka berbeda dari nilai backend/popup).
 const FACE_ROT: Record<number, [number, number, number]> = {
   1: [0, 0, 0],
-  2: [0, 0, -Math.PI / 2],
+  2: [0, 0, Math.PI / 2],
   3: [Math.PI / 2, 0, 0],
   4: [-Math.PI / 2, 0, 0],
-  5: [0, 0, Math.PI / 2],
+  5: [0, 0, -Math.PI / 2],
   6: [Math.PI, 0, 0],
 };
-
-// Fungsi: determine face pointing UP dari rotation
-function detectFaceUp(rot: { x: number; y: number; z: number }): number {
-  // Normalize angles ke range [0, 2π]
-  const normalize = (a: number) => {
-    let n = a % (Math.PI * 2);
-    if (n < 0) n += Math.PI * 2;
-    return n;
-  };
-
-  const x = normalize(rot.x);
-  const y = normalize(rot.y);
-  const z = normalize(rot.z);
-  const eps = 0.15; // ketat: 0.15 rad ≈ 8.6°
-
-  let bestMatch = 1;
-  let bestDist = Infinity;
-
-  // Cek setiap face, track best match
-  for (const [face, [tx, ty, tz]] of Object.entries(FACE_ROT)) {
-    const fx = normalize(tx);
-    const fy = normalize(ty);
-    const fz = normalize(tz);
-
-    const dx = Math.min(Math.abs(x - fx), Math.abs(x - fx - Math.PI * 2), Math.abs(x - fx + Math.PI * 2));
-    const dy = Math.min(Math.abs(y - fy), Math.abs(y - fy - Math.PI * 2), Math.abs(y - fy + Math.PI * 2));
-    const dz = Math.min(Math.abs(z - fz), Math.abs(z - fz - Math.PI * 2), Math.abs(z - fz + Math.PI * 2));
-    const totalDist = dx + dy + dz;
-
-    if (totalDist < bestDist) {
-      bestDist = totalDist;
-      bestMatch = Number(face);
-    }
-
-    if (dx < eps && dy < eps && dz < eps) {
-      console.log(`[DICE] Face ${face} matched at distance ${totalDist.toFixed(3)}`);
-      return Number(face);
-    }
-  }
-
-  console.log(`[DICE] No exact match, best: face ${bestMatch} at dist ${bestDist.toFixed(3)}`);
-  return bestMatch;
-}
 
 const PIPS: Record<number, [number, number][]> = {
   1: [[0, 0]],
@@ -81,19 +42,16 @@ function Die({
   x,
   seed,
   onSettled,
-  onFaceUp,
 }: {
   value: number;
   x: number;
   seed: number;
   onSettled?: () => void;
-  onFaceUp?: (face: number) => void;
 }) {
   const ref = useRef<THREE.Group>(null);
   const phase = useRef<"fly" | "settle">("fly");
   const settledNotified = useRef(false);
   const vel = useRef({ y: 0, t: 0 });
-  const lastReportedFace = useRef<number | null>(null);
 
   useEffect(() => {
     phase.current = "fly";
@@ -145,17 +103,9 @@ function Die({
       const dy = Math.abs(shortAngle(g.rotation.y, ty));
       const dz = Math.abs(shortAngle(g.rotation.z, tz));
       const isFullySettled = dx < 0.05 && dy < 0.05 && dz < 0.05;
-      
-      // Deteksi & laporkan face HANYA saat truly settled
-      if (isFullySettled) {
-        const faceUp = detectFaceUp(g.rotation);
-        if (lastReportedFace.current !== faceUp) {
-          lastReportedFace.current = faceUp;
-          onFaceUp?.(faceUp);
-        }
-      }
-      
-      // Mark settled hanya untuk onSettled
+
+      // Dadu snap deterministik ke FACE_ROT[value] → muka `value` selalu di atas.
+      // Cukup beri tahu saat sudah benar-benar diam; nilai yang tampil = value.
       if (!settledNotified.current && isFullySettled) {
         settledNotified.current = true;
         onSettled?.();
@@ -192,51 +142,33 @@ export default function Dice3D({
   dice,
   rollId,
   onAllSettled,
-  onVisualFaces,
 }: {
   dice: [number, number] | null;
   rollId: number;
   onAllSettled?: () => void;
-  onVisualFaces?: (faces: [number, number]) => void;
 }) {
   // rollId berubah tiap lemparan agar dadu dilempar ulang walau nilainya sama
   const [visible, setVisible] = useState(false);
-  const [visualFaces, setVisualFaces] = useState<[number | null, number | null]>([null, null]);
   const settledCount = useRef(0);
-  const settledFacesRef = useRef<[number | null, number | null]>([null, null]);
   const hasReportedRef = useRef(false);
   useEffect(() => {
     if (dice) setVisible(true);
     settledCount.current = 0;
-    setVisualFaces([null, null]);
-    settledFacesRef.current = [null, null];
     hasReportedRef.current = false;
   }, [dice, rollId]);
   if (!dice || !visible) return null;
+  // Kedua dadu snap ke FACE_ROT[value]; saat keduanya diam → beri tahu sekali.
   const handleSettled = () => {
     settledCount.current++;
     if (settledCount.current >= 2 && !hasReportedRef.current) {
       hasReportedRef.current = true;
-      console.log(`[FACES] Both dice settled, final faces: [${settledFacesRef.current[0]}, ${settledFacesRef.current[1]}]`);
-      if (settledFacesRef.current[0] !== null && settledFacesRef.current[1] !== null) {
-        onVisualFaces?.(settledFacesRef.current as [number, number]);
-      }
+      onAllSettled?.();
     }
-    onAllSettled?.();
-  };
-  const handleFaceUp = (index: 0 | 1, face: number) => {
-    settledFacesRef.current[index] = face;
-    setVisualFaces((prev) => {
-      const updated: [number | null, number | null] = [...prev];
-      updated[index] = face;
-      console.log(`[FACES] Die ${index} = ${face}, both = [${updated[0]}, ${updated[1]}] (waiting for settle callback)`);
-      return updated;
-    });
   };
   return (
     <group position={[0, 0, 1.2]}>
-      <Die value={dice[0]} x={-0.45} seed={rollId * 7 + 1} onSettled={handleSettled} onFaceUp={(f) => handleFaceUp(0, f)} />
-      <Die value={dice[1]} x={0.45} seed={rollId * 13 + 5} onSettled={handleSettled} onFaceUp={(f) => handleFaceUp(1, f)} />
+      <Die value={dice[0]} x={-0.45} seed={rollId * 7 + 1} onSettled={handleSettled} />
+      <Die value={dice[1]} x={0.45} seed={rollId * 13 + 5} onSettled={handleSettled} />
     </group>
   );
 }

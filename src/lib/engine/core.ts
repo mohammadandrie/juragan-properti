@@ -90,6 +90,11 @@ export function sendToJail(g: GameState, p: Player) {
   p.pos = 10;
   p.inJail = true;
   p.jailTurns = 0;
+  // Tujuan akhir = petak Penjara (10). Tanpa ini destTile nyangkut di petak
+  // sebelumnya (mis. 30 "Masuk Penjara") sehingga highlight & fokus kamera
+  // mengarah ke petak yang salah saat pemain dilempar ke penjara.
+  g.destTile = p.pos;
+  g.lastMoveAt = Date.now();
 }
 
 export function movePlayer(g: GameState, p: Player, steps: number) {

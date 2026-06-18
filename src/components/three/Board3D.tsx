@@ -25,7 +25,6 @@ function Scene({
   onDiceSettled,
   movingPawnIsLocal,
   destActive,
-  onVisualFaces,
 }: {
   state: ClientGameState;
   highlightTiles: number[];
@@ -36,7 +35,6 @@ function Scene({
   onDiceSettled?: () => void;
   movingPawnIsLocal?: boolean;
   destActive?: boolean;
-  onVisualFaces?: (faces: [number, number]) => void;
 }) {
   const highlightSet = new Set(highlightTiles);
   if (!state || !state.players.length) return null;
@@ -192,7 +190,7 @@ function Scene({
         );
       })}
 
-      <Dice3D dice={state.lastDice} rollId={rollId} onAllSettled={onDiceSettled} onVisualFaces={onVisualFaces} />
+      <Dice3D dice={state.lastDice} rollId={rollId} onAllSettled={onDiceSettled} />
       <Particles bursts={bursts} onDone={(id) => setBursts((arr) => arr.filter((b) => b.id !== id))} />
 
       <CameraRig
@@ -220,7 +218,6 @@ export default function Board3D({
   onDiceSettled,
   movingPawnIsLocal,
   destActive,
-  onVisualFaces,
 }: {
   state: ClientGameState;
   highlightTiles: number[];
@@ -231,7 +228,6 @@ export default function Board3D({
   onDiceSettled?: () => void;
   movingPawnIsLocal?: boolean;
   destActive?: boolean;
-  onVisualFaces?: (faces: [number, number]) => void;
 }) {
   return (
     <Canvas
@@ -268,7 +264,6 @@ export default function Board3D({
         onDiceSettled={onDiceSettled}
         movingPawnIsLocal={movingPawnIsLocal}
         destActive={destActive}
-        onVisualFaces={onVisualFaces}
       />
     </Canvas>
   );
