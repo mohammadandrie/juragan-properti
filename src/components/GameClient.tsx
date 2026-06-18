@@ -60,6 +60,8 @@ export default function GameClient({ code }: { code: string }) {
   const prevState = useRef<ClientGameState | null>(null);
   // Cache dadu saat animasi dimulai → gunakan di popup (hindari race condition)
   const displayDiceRef = useRef<[number, number] | null>(null);
+  // Visual faces dari geometri dadu (bukan backend value)
+  const [visualFaces, setVisualFaces] = useState<[number, number] | null>(null);
 
   // efek suara + deteksi gerak pion untuk gating
   useEffect(() => {
@@ -74,6 +76,7 @@ export default function GameClient({ code }: { code: string }) {
     if (JSON.stringify(p.lastDice) !== JSON.stringify(state.lastDice) && state.lastDice) {
       sfx.dice();
       displayDiceRef.current = state.lastDice; // cache dadu saat roll baru
+      setVisualFaces(null); // reset visual faces, tunggu update dari geometri
       setDiceReady(false); // mulai animasi baru
       setHoldUntil(0);
     }
@@ -238,7 +241,8 @@ export default function GameClient({ code }: { code: string }) {
   }
 
   const winner = state.winner ? state.players.find((p) => p.id === state.winner) : null;
-  const diceSum = displayDiceRef.current ? displayDiceRef.current[0] + displayDiceRef.current[1] : null;
+  // Use visual faces if available (from geometry), else fall back to cached backend value
+  const diceSum = visualFaces ? visualFaces[0] + visualFaces[1] : (displayDiceRef.current ? displayDiceRef.current[0] + displayDiceRef.current[1] : null);
 
   const remainMs = state.endsAt !== null ? Math.max(0, state.endsAt - clock) : null;
   const remainStr =
@@ -279,6 +283,7 @@ export default function GameClient({ code }: { code: string }) {
             onDiceSettled={handleDiceSettled}
             movingPawnIsLocal={movingPawnIsLocal && inMove}
             destActive={showingDiceNumber && (inHold || inMove)}
+            onVisualFaces={setVisualFaces}
           />
         </CanvasBoundary>
       </section>

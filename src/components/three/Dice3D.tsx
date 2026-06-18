@@ -14,6 +14,38 @@ const FACE_ROT: Record<number, [number, number, number]> = {
   6: [Math.PI, 0, 0],
 };
 
+// Fungsi: determine face pointing UP dari rotation
+function detectFaceUp(rot: { x: number; y: number; z: number }): number {
+  // Normalize angles ke range [0, 2π]
+  const normalize = (a: number) => {
+    let n = a % (Math.PI * 2);
+    if (n < 0) n += Math.PI * 2;
+    return n;
+  };
+
+  const x = normalize(rot.x);
+  const y = normalize(rot.y);
+  const z = normalize(rot.z);
+  const eps = 0.3; // toleransi untuk match
+
+  // Cek setiap face
+  for (const [face, [tx, ty, tz]] of Object.entries(FACE_ROT)) {
+    const fx = normalize(tx);
+    const fy = normalize(ty);
+    const fz = normalize(tz);
+
+    const dx = Math.min(Math.abs(x - fx), Math.abs(x - fx - Math.PI * 2), Math.abs(x - fx + Math.PI * 2));
+    const dy = Math.min(Math.abs(y - fy), Math.abs(y - fy - Math.PI * 2), Math.abs(y - fy + Math.PI * 2));
+    const dz = Math.min(Math.abs(z - fz), Math.abs(z - fz - Math.PI * 2), Math.abs(z - fz + Math.PI * 2));
+
+    if (dx < eps && dy < eps && dz < eps) {
+      return Number(face);
+    }
+  }
+
+  return 1; // default fallback
+}
+
 const PIPS: Record<number, [number, number][]> = {
   1: [[0, 0]],
   2: [[-0.16, -0.16], [0.16, 0.16]],
@@ -38,16 +70,19 @@ function Die({
   x,
   seed,
   onSettled,
+  onFaceUp,
 }: {
   value: number;
   x: number;
   seed: number;
   onSettled?: () => void;
+  onFaceUp?: (face: number) => void;
 }) {
   const ref = useRef<THREE.Group>(null);
   const phase = useRef<"fly" | "settle">("fly");
   const settledNotified = useRef(false);
   const vel = useRef({ y: 0, t: 0 });
+  const lastReportedFace = useRef<number | null>(null);
 
   useEffect(() => {
     phase.current = "fly";
@@ -96,6 +131,11 @@ function Die({
       // dadu sudah cukup mendekati nilainya → beri tahu sekali
       if (!settledNotified.current && Math.abs(shortAngle(g.rotation.x, tx)) < 0.05) {
         settledNotified.current = true;
+        const faceUp = detectFaceUp(g.rotation);
+        if (lastReportedFace.current !== faceUp) {
+          lastReportedFace.current = faceUp;
+          onFaceUp?.(faceUp);
+        }
         onSettled?.();
       }
     }
@@ -130,27 +170,41 @@ export default function Dice3D({
   dice,
   rollId,
   onAllSettled,
+  onVisualFaces,
 }: {
   dice: [number, number] | null;
   rollId: number;
   onAllSettled?: () => void;
+  onVisualFaces?: (faces: [number, number]) => void;
 }) {
   // rollId berubah tiap lemparan agar dadu dilempar ulang walau nilainya sama
   const [visible, setVisible] = useState(false);
+  const [visualFaces, setVisualFaces] = useState<[number | null, number | null]>([null, null]);
   const settledCount = useRef(0);
   useEffect(() => {
     if (dice) setVisible(true);
     settledCount.current = 0;
+    setVisualFaces([null, null]);
   }, [dice, rollId]);
   if (!dice || !visible) return null;
   const handleSettled = () => {
     settledCount.current++;
     if (settledCount.current >= 2) onAllSettled?.();
   };
+  const handleFaceUp = (index: 0 | 1, face: number) => {
+    setVisualFaces((prev) => {
+      const updated: [number | null, number | null] = [...prev];
+      updated[index] = face;
+      if (updated[0] !== null && updated[1] !== null) {
+        onVisualFaces?.(updated as [number, number]);
+      }
+      return updated;
+    });
+  };
   return (
     <group position={[0, 0, 1.2]}>
-      <Die value={dice[0]} x={-0.45} seed={rollId * 7 + 1} onSettled={handleSettled} />
-      <Die value={dice[1]} x={0.45} seed={rollId * 13 + 5} onSettled={handleSettled} />
+      <Die value={dice[0]} x={-0.45} seed={rollId * 7 + 1} onSettled={handleSettled} onFaceUp={(f) => handleFaceUp(0, f)} />
+      <Die value={dice[1]} x={0.45} seed={rollId * 13 + 5} onSettled={handleSettled} onFaceUp={(f) => handleFaceUp(1, f)} />
     </group>
   );
 }
