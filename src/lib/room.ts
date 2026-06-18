@@ -50,6 +50,7 @@ export function newGame(hostName: string): GameState {
     phaseDeadline: null,
     destTile: null,
     lastMoveAt: 0,
+    animUntil: 0,
     activeEvents: [],
     lastEvent: null,
     lastDice: null,

@@ -34,6 +34,10 @@ export function rollDice(g: GameState): void {
   g.lastDice = [d1, d2];
   g.phaseDeadline = null;
   g.destTile = null;
+  // Minimal: cukup untuk menampilkan dadu bergulir + angka popup walau pion
+  // tidak berpindah (mis. gagal lempar dobel di penjara). movePlayer akan
+  // memperpanjang ini bila pion benar-benar berjalan.
+  g.animUntil = Date.now() + MOVE_ANIM_BASE_MS;
   const isDouble = d1 === d2;
 
   if (p.inJail) {
@@ -86,6 +90,18 @@ export function rollDice(g: GameState): void {
   if (g.canRoll) g.phaseDeadline = Date.now() + 30_000;
 }
 
+// Estimasi durasi animasi di klien: dadu mendarat + jeda baca angka + pion
+// berjalan ke petak tujuan. Bot/AFK menunggu sampai durasi ini lewat sebelum
+// aksi berikutnya, supaya alurnya sama dengan pemain manusia (dadu → angka →
+// pion sampai petak → baru aksi). Selaras dengan START_DELAY (2s) +
+// STEP_DURATION (~0.28s/petak) di Pawn3D & gating di GameClient.
+const MOVE_ANIM_BASE_MS = 2000; // dadu mendarat + jeda baca (≈ START_DELAY klien)
+const MOVE_ANIM_STEP_MS = 300; // per petak (klien 0.28s + buffer)
+const MOVE_ANIM_BUFFER_MS = 600;
+export function moveAnimMs(steps: number): number {
+  return MOVE_ANIM_BASE_MS + Math.min(Math.abs(steps), 12) * MOVE_ANIM_STEP_MS + MOVE_ANIM_BUFFER_MS;
+}
+
 export function sendToJail(g: GameState, p: Player) {
   p.pos = 10;
   p.inJail = true;
@@ -95,6 +111,9 @@ export function sendToJail(g: GameState, p: Player) {
   // mengarah ke petak yang salah saat pemain dilempar ke penjara.
   g.destTile = p.pos;
   g.lastMoveAt = Date.now();
+  // Klien melakukan teleport halus ke penjara — beri jeda animasi seperti
+  // gerakan pendek agar bot tidak buru-buru lanjut.
+  g.animUntil = Date.now() + moveAnimMs(2);
 }
 
 export function movePlayer(g: GameState, p: Player, steps: number) {
@@ -102,6 +121,7 @@ export function movePlayer(g: GameState, p: Player, steps: number) {
   p.pos = (p.pos + steps + 40) % 40;
   g.destTile = p.pos; // petak tujuan untuk highlight visual
   g.lastMoveAt = Date.now(); // track move time untuk gate animasi bot
+  g.animUntil = Date.now() + moveAnimMs(steps); // tahan bot sampai animasi selesai
   if (steps > 0 && p.pos < from) {
     transfer(g, null, p, SALARY_PASS_START);
     p.startPassCount++;

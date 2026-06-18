@@ -22,6 +22,11 @@ export function decideBotAction(g: GameState, bot: Player): GameAction | null {
   const persona = bot.bot ?? "untung";
   const isMyTurn = g.players[g.currentPlayer]?.id === bot.id && g.phase === "playing";
 
+  // Tunggu animasi klien (dadu bergulir → angka popup → pion jalan sampai
+  // petak) benar-benar selesai sebelum bot/AFK mengambil keputusan APA PUN.
+  // Membuat alur bot identik dengan pemain manusia, tidak buru-buru.
+  if (Date.now() < g.animUntil) return null;
+
   // --- kuis: jawab (bot lumayan pintar, kadang salah) ---
   if (g.quiz && g.quiz.playerId === bot.id) {
     const q = QUIZ_QUESTIONS[g.quiz.questionIdx];
@@ -32,15 +37,6 @@ export function decideBotAction(g: GameState, bot: Player): GameAction | null {
 
   if (!isMyTurn) return null;
 
-  // Gate bot actions saat animasi pion jalan (1.5s buffer untuk visual animation)
-  const timeSinceMove = Date.now() - g.lastMoveAt;
-  const animationMs = 1500; // max 1.2s animasi + buffer
-  const isAnimating = timeSinceMove < animationMs && g.lastDice;
-  
-  // Jangan biarkan bot decide buy/rent/upgrade saat pion masih bergerak
-  if (isAnimating && (g.pendingBuy || g.pendingRent || g.pendingUpgrade)) {
-    return null; // tunggu animasi selesai
-  }
   if (g.pendingRent && g.pendingRent.playerId === bot.id) {
     const pr = g.pendingRent;
     // pertimbangkan ambil alih jika mampu & properti bernilai strategis (jago saja)

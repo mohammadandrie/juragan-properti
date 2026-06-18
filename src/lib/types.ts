@@ -158,6 +158,8 @@ export interface GameState {
   // info dadu & tujuan untuk visual flow
   destTile: number | null; // petak tujuan yang di-highlight sebelum pion jalan
   lastMoveAt: number; // epoch ms saat pion terakhir bergerak (untuk gate animasi bot)
+  animUntil: number; // epoch ms kapan animasi klien (dadu+pion jalan) diperkirakan
+                     // selesai; bot/AFK menunggu sampai ini lewat sebelum aksi.
   activeEvents: ActiveEvent[];
   lastEvent: { eventId: string; tile?: number; at: number } | null;
   lastDice: [number, number] | null;
