@@ -58,6 +58,8 @@ export default function GameClient({ code }: { code: string }) {
   const [, setNowTick] = useState(0);
   const tokenRef = useRef<string | null>(null);
   const prevState = useRef<ClientGameState | null>(null);
+  // Cache dadu saat animasi dimulai → gunakan di popup (hindari race condition)
+  const displayDiceRef = useRef<[number, number] | null>(null);
 
   // efek suara + deteksi gerak pion untuk gating
   useEffect(() => {
@@ -66,6 +68,7 @@ export default function GameClient({ code }: { code: string }) {
     if (!p || !state || p.version >= state.version) return;
     if (JSON.stringify(p.lastDice) !== JSON.stringify(state.lastDice) && state.lastDice) {
       sfx.dice();
+      displayDiceRef.current = state.lastDice; // cache dadu saat roll baru
       setDiceReady(false); // mulai animasi baru
       setHoldUntil(0);
     }
@@ -230,7 +233,7 @@ export default function GameClient({ code }: { code: string }) {
   }
 
   const winner = state.winner ? state.players.find((p) => p.id === state.winner) : null;
-  const diceSum = state.lastDice ? state.lastDice[0] + state.lastDice[1] : null;
+  const diceSum = displayDiceRef.current ? displayDiceRef.current[0] + displayDiceRef.current[1] : null;
 
   const remainMs = state.endsAt !== null ? Math.max(0, state.endsAt - clock) : null;
   const remainStr =
@@ -299,10 +302,10 @@ export default function GameClient({ code }: { code: string }) {
           {/* angka dadu — muncul SETELAH dadu berhenti animasinya. Sum
               didesain sebagai box ke-3 berwarna emas, sejajar dengan kedua
               dadu, agar terlihat sebagai bagian dari hasil lemparan. */}
-          {showingDiceNumber && diceSum !== null && state.lastDice && (
+          {showingDiceNumber && diceSum !== null && displayDiceRef.current && (
             <div className="animate-[dropIn_0.35s_cubic-bezier(0.34,1.56,0.64,1)] text-center">
               <div className="flex items-center justify-center gap-3">
-                {state.lastDice.map((d, i) => (
+                {displayDiceRef.current.map((d, i) => (
                   <span
                     key={i}
                     className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-3xl font-black text-slate-900 shadow-xl ring-2 ring-amber-300"
