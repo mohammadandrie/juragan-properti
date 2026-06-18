@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Text, ContactShadows, Billboard } from "@react-three/drei";
+import { Text, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import { BOARD } from "@/lib/board";
 import { ClientGameState } from "@/lib/types";
@@ -15,9 +15,10 @@ import CameraRig, { CameraMode, PawnFocusRef } from "./CameraRig";
 import Particles, { Burst } from "./Particles";
 import World3D from "./World3D";
 
-// Marker prediksi langkah: angka melayang di atas petak tujuan dari posisi
-// pemain giliran (kalau dadu = N, berhenti di sini). Membantu pemain &
-// penonton membaca papan sebelum dadu dilempar.
+// Marker prediksi langkah: angka N ditempel DATAR di permukaan petak tujuan
+// dari posisi pemain giliran (kalau dadu = N, berhenti di sini). Bukan
+// melayang — menempel di papan, di lahan kosong tengah petak, sehingga semua
+// pemain bisa membacanya sebelum dadu dilempar.
 function PredictMarkers({ from }: { from: number }) {
   return (
     <>
@@ -25,26 +26,36 @@ function PredictMarkers({ from }: { from: number }) {
         const tileId = (from + n) % 40;
         const t = tileTransform(tileId);
         return (
-          <Billboard key={n} position={[t.x, 0.92, t.z]}>
-            <mesh>
-              <circleGeometry args={[0.21, 24]} />
-              <meshBasicMaterial color="#0b1320" transparent opacity={0.82} />
+          <group key={n} position={[t.x, 0, t.z]} rotation={[0, t.rotY, 0]}>
+            {/* alas bundar gelap, datar di atas permukaan petak */}
+            <mesh position={[0, 0.112, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <circleGeometry args={[0.21, 28]} />
+              <meshStandardMaterial
+                color="#0b1320"
+                emissive="#fbbf24"
+                emissiveIntensity={0.18}
+                transparent
+                opacity={0.9}
+              />
             </mesh>
-            <mesh position={[0, 0, -0.001]}>
-              <ringGeometry args={[0.21, 0.25, 24]} />
-              <meshBasicMaterial color="#fbbf24" transparent opacity={0.9} />
+            {/* cincin emas tepi */}
+            <mesh position={[0, 0.113, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[0.21, 0.25, 28]} />
+              <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
             </mesh>
+            {/* angka langkah, tergeletak datar di papan */}
             <Text
-              fontSize={0.25}
+              position={[0, 0.115, 0]}
+              rotation={[-Math.PI / 2, 0, 0]}
+              fontSize={0.26}
               color="#fbbf24"
               anchorX="center"
               anchorY="middle"
               fontWeight={900}
-              position={[0, 0, 0.01]}
             >
               {n}
             </Text>
-          </Billboard>
+          </group>
         );
       })}
     </>
