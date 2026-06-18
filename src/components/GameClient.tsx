@@ -65,7 +65,12 @@ export default function GameClient({ code }: { code: string }) {
   useEffect(() => {
     const p = prevState.current;
     prevState.current = state;
-    if (!p || !state || p.version >= state.version) return;
+    if (!state) return;
+    // init cache saat state pertama load (user join mid-game)
+    if (!p && state.lastDice) {
+      displayDiceRef.current = state.lastDice;
+    }
+    if (!p || p.version >= state.version) return;
     if (JSON.stringify(p.lastDice) !== JSON.stringify(state.lastDice) && state.lastDice) {
       sfx.dice();
       displayDiceRef.current = state.lastDice; // cache dadu saat roll baru
