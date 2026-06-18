@@ -97,6 +97,7 @@ export default function GameClient({ code }: { code: string }) {
     
     // Reset animation gates saat currentPlayer berubah (fix: buttons gk terblokir saat takeover)
     if (p.currentPlayer !== state.currentPlayer) {
+      console.log(`[GATE] Reset: player ${p.currentPlayer} → ${state.currentPlayer}`);
       setHoldUntil(0);
       setMoveUntil(0);
       setDiceReady(false);
