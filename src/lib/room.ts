@@ -49,6 +49,7 @@ export function newGame(hostName: string): GameState {
     quiz: null,
     phaseDeadline: null,
     destTile: null,
+    lastMoveAt: 0,
     activeEvents: [],
     lastEvent: null,
     lastDice: null,

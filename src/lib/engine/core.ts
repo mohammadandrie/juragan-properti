@@ -96,6 +96,7 @@ export function movePlayer(g: GameState, p: Player, steps: number) {
   const from = p.pos;
   p.pos = (p.pos + steps + 40) % 40;
   g.destTile = p.pos; // petak tujuan untuk highlight visual
+  g.lastMoveAt = Date.now(); // track move time untuk gate animasi bot
   if (steps > 0 && p.pos < from) {
     transfer(g, null, p, SALARY_PASS_START);
     p.startPassCount++;

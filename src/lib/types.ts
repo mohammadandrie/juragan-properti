@@ -157,6 +157,7 @@ export interface GameState {
   phaseDeadline: number | null;
   // info dadu & tujuan untuk visual flow
   destTile: number | null; // petak tujuan yang di-highlight sebelum pion jalan
+  lastMoveAt: number; // epoch ms saat pion terakhir bergerak (untuk gate animasi bot)
   activeEvents: ActiveEvent[];
   lastEvent: { eventId: string; tile?: number; at: number } | null;
   lastDice: [number, number] | null;

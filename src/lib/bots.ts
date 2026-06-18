@@ -32,7 +32,15 @@ export function decideBotAction(g: GameState, bot: Player): GameAction | null {
 
   if (!isMyTurn) return null;
 
-  // --- bayar sewa ---
+  // Gate bot actions saat animasi pion jalan (1.5s buffer untuk visual animation)
+  const timeSinceMove = Date.now() - g.lastMoveAt;
+  const animationMs = 1500; // max 1.2s animasi + buffer
+  const isAnimating = timeSinceMove < animationMs && g.lastDice;
+  
+  // Jangan biarkan bot decide buy/rent/upgrade saat pion masih bergerak
+  if (isAnimating && (g.pendingBuy || g.pendingRent || g.pendingUpgrade)) {
+    return null; // tunggu animasi selesai
+  }
   if (g.pendingRent && g.pendingRent.playerId === bot.id) {
     const pr = g.pendingRent;
     // pertimbangkan ambil alih jika mampu & properti bernilai strategis (jago saja)
