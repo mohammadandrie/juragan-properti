@@ -100,6 +100,7 @@ export default function GameClient({ code }: { code: string }) {
       setHoldUntil(0);
       setMoveUntil(0);
       setDiceReady(false);
+      displayDiceRef.current = null; // Clear cache so animating = false
     }
 
     // pion berpindah → catat siapa & berapa langkah, tahan eksekusi pion-jalan
