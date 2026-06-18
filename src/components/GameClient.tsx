@@ -250,10 +250,6 @@ export default function GameClient({ code }: { code: string }) {
   const winner = state.winner ? state.players.find((p) => p.id === state.winner) : null;
   // Use visual faces if available (from geometry), else fall back to cached backend value
   const diceSum = visualFaces ? visualFaces[0] + visualFaces[1] : (displayDiceRef.current ? displayDiceRef.current[0] + displayDiceRef.current[1] : null);
-  
-  useEffect(() => {
-    console.log(`[GAMECLIENT] visualFaces updated: ${visualFaces ? `[${visualFaces[0]}, ${visualFaces[1]}]` : "null"}`);
-  }, [visualFaces]);
 
   const remainMs = state.endsAt !== null ? Math.max(0, state.endsAt - clock) : null;
   const remainStr =
