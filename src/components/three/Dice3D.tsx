@@ -195,25 +195,33 @@ export default function Dice3D({
   const [visible, setVisible] = useState(false);
   const [visualFaces, setVisualFaces] = useState<[number | null, number | null]>([null, null]);
   const settledCount = useRef(0);
+  const settledFacesRef = useRef<[number | null, number | null]>([null, null]);
+  const hasReportedRef = useRef(false);
   useEffect(() => {
     if (dice) setVisible(true);
     settledCount.current = 0;
     setVisualFaces([null, null]);
+    settledFacesRef.current = [null, null];
+    hasReportedRef.current = false;
   }, [dice, rollId]);
   if (!dice || !visible) return null;
   const handleSettled = () => {
     settledCount.current++;
-    if (settledCount.current >= 2) onAllSettled?.();
+    if (settledCount.current >= 2 && !hasReportedRef.current) {
+      hasReportedRef.current = true;
+      console.log(`[FACES] Both dice settled, final faces: [${settledFacesRef.current[0]}, ${settledFacesRef.current[1]}]`);
+      if (settledFacesRef.current[0] !== null && settledFacesRef.current[1] !== null) {
+        onVisualFaces?.(settledFacesRef.current as [number, number]);
+      }
+    }
+    onAllSettled?.();
   };
   const handleFaceUp = (index: 0 | 1, face: number) => {
+    settledFacesRef.current[index] = face;
     setVisualFaces((prev) => {
       const updated: [number | null, number | null] = [...prev];
       updated[index] = face;
-      console.log(`[FACES] Die ${index} = ${face}, both = [${updated[0]}, ${updated[1]}]`);
-      if (updated[0] !== null && updated[1] !== null) {
-        console.log(`[FACES] Both ready, firing onVisualFaces([${updated[0]}, ${updated[1]}])`);
-        onVisualFaces?.(updated as [number, number]);
-      }
+      console.log(`[FACES] Die ${index} = ${face}, both = [${updated[0]}, ${updated[1]}] (waiting for settle callback)`);
       return updated;
     });
   };
