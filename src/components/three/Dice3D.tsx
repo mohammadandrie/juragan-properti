@@ -26,9 +26,12 @@ function detectFaceUp(rot: { x: number; y: number; z: number }): number {
   const x = normalize(rot.x);
   const y = normalize(rot.y);
   const z = normalize(rot.z);
-  const eps = 0.3; // toleransi untuk match
+  const eps = 0.15; // ketat: 0.15 rad ≈ 8.6°
 
-  // Cek setiap face
+  let bestMatch = 1;
+  let bestDist = Infinity;
+
+  // Cek setiap face, track best match
   for (const [face, [tx, ty, tz]] of Object.entries(FACE_ROT)) {
     const fx = normalize(tx);
     const fy = normalize(ty);
@@ -37,13 +40,21 @@ function detectFaceUp(rot: { x: number; y: number; z: number }): number {
     const dx = Math.min(Math.abs(x - fx), Math.abs(x - fx - Math.PI * 2), Math.abs(x - fx + Math.PI * 2));
     const dy = Math.min(Math.abs(y - fy), Math.abs(y - fy - Math.PI * 2), Math.abs(y - fy + Math.PI * 2));
     const dz = Math.min(Math.abs(z - fz), Math.abs(z - fz - Math.PI * 2), Math.abs(z - fz + Math.PI * 2));
+    const totalDist = dx + dy + dz;
+
+    if (totalDist < bestDist) {
+      bestDist = totalDist;
+      bestMatch = Number(face);
+    }
 
     if (dx < eps && dy < eps && dz < eps) {
+      console.log(`[DICE] Face ${face} matched at distance ${totalDist.toFixed(3)}`);
       return Number(face);
     }
   }
 
-  return 1; // default fallback
+  console.log(`[DICE] No exact match, best: face ${bestMatch} at dist ${bestDist.toFixed(3)}`);
+  return bestMatch;
 }
 
 const PIPS: Record<number, [number, number][]> = {
@@ -101,16 +112,16 @@ function Die({
     if (!g) return;
     if (phase.current === "fly") {
       vel.current.t += delta;
-      vel.current.y -= 14 * delta; // gravitasi
+      vel.current.y -= 20 * delta; // gravitasi lebih kuat (realistic)
       g.position.y += vel.current.y * delta;
-      g.rotation.x += delta * (9 + (seed % 5));
-      g.rotation.y += delta * 7;
-      g.rotation.z += delta * 5;
+      g.rotation.x += delta * (11 + (seed % 6)); // spin lebih cepat
+      g.rotation.y += delta * 9;
+      g.rotation.z += delta * 7;
       // mantul di "meja" (y=0.3)
       if (g.position.y <= 0.3) {
         g.position.y = 0.3;
         if (Math.abs(vel.current.y) > 1.2) {
-          vel.current.y = -vel.current.y * 0.45; // pantulan
+          vel.current.y = -vel.current.y * 0.35; // bounce lebih realistis (kehilangan energy lebih banyak)
         } else {
           phase.current = "settle";
         }
@@ -128,14 +139,17 @@ function Die({
       g.position.y += (0.3 - g.position.y) * k;
       g.position.x += (x - g.position.x) * k;
       g.position.z += (0 - g.position.z) * k;
-      // dadu sudah cukup mendekati nilainya → beri tahu sekali
+      
+      // Deteksi & laporkan face on every frame (callback hanya jika berubah)
+      const faceUp = detectFaceUp(g.rotation);
+      if (lastReportedFace.current !== faceUp) {
+        lastReportedFace.current = faceUp;
+        onFaceUp?.(faceUp);
+      }
+      
+      // Mark settled hanya untuk onSettled (visual dadu fixed)
       if (!settledNotified.current && Math.abs(shortAngle(g.rotation.x, tx)) < 0.05) {
         settledNotified.current = true;
-        const faceUp = detectFaceUp(g.rotation);
-        if (lastReportedFace.current !== faceUp) {
-          lastReportedFace.current = faceUp;
-          onFaceUp?.(faceUp);
-        }
         onSettled?.();
       }
     }
