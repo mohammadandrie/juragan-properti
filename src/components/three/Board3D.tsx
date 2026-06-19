@@ -21,7 +21,8 @@ import World3D from "./World3D";
 // berhenti di sini) sehingga semua pemain bisa membacanya sebelum dadu dilempar.
 function PredictMarkers({ from }: { from: number }) {
   // jarak geser keluar dari tepi dalam petak ke lahan kosong papan
-  const OUT = 0.32; // (petak: -d/2 = -0.8) → marker di z lokal ≈ -1.12
+  const OUT = 0.28;
+  const R = 0.145; // radius alas — diperkecil agar muat rapi di petak pojok/belokan
   return (
     <>
       {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
@@ -32,7 +33,7 @@ function PredictMarkers({ from }: { from: number }) {
           <group key={n} position={[t.x, 0, t.z]} rotation={[0, t.rotY, 0]}>
             {/* alas bundar gelap, datar menempel di papan */}
             <mesh position={[0, 0.1, z]} rotation={[-Math.PI / 2, 0, 0]}>
-              <circleGeometry args={[0.2, 28]} />
+              <circleGeometry args={[R, 24]} />
               <meshStandardMaterial
                 color="#0b1320"
                 emissive="#fbbf24"
@@ -43,14 +44,14 @@ function PredictMarkers({ from }: { from: number }) {
             </mesh>
             {/* cincin emas tepi */}
             <mesh position={[0, 0.101, z]} rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[0.2, 0.24, 28]} />
+              <ringGeometry args={[R, R + 0.03, 24]} />
               <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
             </mesh>
             {/* angka langkah, tergeletak datar di papan */}
             <Text
               position={[0, 0.103, z]}
               rotation={[-Math.PI / 2, 0, 0]}
-              fontSize={0.25}
+              fontSize={0.18}
               color="#fbbf24"
               anchorX="center"
               anchorY="middle"
