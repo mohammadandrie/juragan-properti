@@ -6,7 +6,7 @@ import { Text, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import { BOARD } from "@/lib/board";
 import { ClientGameState } from "@/lib/types";
-import { HALF, pawnPos, tileTransform } from "./layout";
+import { HALF, TILE, CORNER, pawnPos, tileTransform } from "./layout";
 import Tile3D from "./Tile3D";
 import House3D from "./House3D";
 import Pawn3D from "./Pawn3D";
@@ -29,10 +29,25 @@ function PredictMarkers({ from }: { from: number }) {
         const tileId = (from + n) % 40;
         const t = tileTransform(tileId);
         const z = -t.d / 2 - OUT; // sisi dalam petak, masuk ke area kosong papan
+
+        // Untuk petak pojok, geser angka ke ujung kotak (sisi yang dekat
+        // petak biasa sebelahnya) supaya nempel di tepi, bukan tengah kotak besar.
+        let localX = 0;
+        if (t.corner) {
+          const cornerEdge = (CORNER - TILE) / 2;
+          // id 0 (MULAI) & 20 (Parkir): geser ke kanan (dekat petak id+1)
+          // id 10 (Penjara) & 30 (Masuk Penjara): geser ke kiri (dekat petak id-1)
+          if (tileId === 0 || tileId === 20) {
+            localX = cornerEdge;
+          } else {
+            localX = -cornerEdge;
+          }
+        }
+
         return (
           <group key={n} position={[t.x, 0, t.z]} rotation={[0, t.rotY, 0]}>
             {/* alas bundar gelap, datar menempel di papan */}
-            <mesh position={[0, 0.1, z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <mesh position={[localX, 0.1, z]} rotation={[-Math.PI / 2, 0, 0]}>
               <circleGeometry args={[R, 24]} />
               <meshStandardMaterial
                 color="#0b1320"
@@ -43,13 +58,13 @@ function PredictMarkers({ from }: { from: number }) {
               />
             </mesh>
             {/* cincin emas tepi */}
-            <mesh position={[0, 0.101, z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <mesh position={[localX, 0.101, z]} rotation={[-Math.PI / 2, 0, 0]}>
               <ringGeometry args={[R, R + 0.03, 24]} />
               <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.6} />
             </mesh>
             {/* angka langkah, tergeletak datar di papan */}
             <Text
-              position={[0, 0.103, z]}
+              position={[localX, 0.103, z]}
               rotation={[-Math.PI / 2, 0, 0]}
               fontSize={0.18}
               color="#fbbf24"
